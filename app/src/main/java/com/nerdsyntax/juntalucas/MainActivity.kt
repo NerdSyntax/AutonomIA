@@ -3,8 +3,8 @@ package com.nerdsyntax.juntalucas
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.nerdsyntax.juntalucas.ui.navigation.AppNavigation
-import com.nerdsyntax.juntalucas.ui.theme.JuntaLucasTheme
+import com.nerdsyntax.juntalucas.core.navigation.AppNavigation
+import com.nerdsyntax.juntalucas.core.ui.theme.JuntaLucasTheme
 
 class MainActivity : ComponentActivity() {
 
