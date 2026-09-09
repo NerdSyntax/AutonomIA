@@ -1,7 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+
     id("com.google.gms.google-services")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -45,12 +47,19 @@ dependencies {
     // Coroutines + Firebase Tasks
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
-    // Lifecycle / ViewModel / StateFlow con Compose
+    // Lifecycle / ViewModel / StateFlow with Compose
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
 
-    // Navegación Compose
+    // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.9.8")
+
+    // Room
+    val roomVersion = "2.8.4"
+
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

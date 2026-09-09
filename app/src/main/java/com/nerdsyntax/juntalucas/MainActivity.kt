@@ -8,15 +8,11 @@ import com.nerdsyntax.juntalucas.core.ui.theme.JuntaLucasTheme
 
 class MainActivity : ComponentActivity() {
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-
             JuntaLucasTheme {
-
                 AppNavigation()
             }
         }
