@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.stateIn
 
 class DashboardViewModel(authRepository: AuthRepository) : ViewModel() {
     val uiState = authRepository.currentUser
-        .map { DashboardUiState(email = it?.email.orEmpty()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
+        .map { user -> DashboardUiState(email = user?.email.orEmpty()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = DashboardUiState()
+        )
 }

@@ -1,6 +1,19 @@
 package com.nerdsyntax.juntalucas.core.navigation
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -16,6 +29,10 @@ import com.nerdsyntax.juntalucas.feature.auth.ui.recovery.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.register.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.verify.*
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.*
+import com.nerdsyntax.juntalucas.feature.movements.ui.*
+import com.nerdsyntax.juntalucas.feature.business.ui.*
+import com.nerdsyntax.juntalucas.feature.ai.ui.*
+import com.nerdsyntax.juntalucas.feature.profile.ui.*
 
 @Composable
 fun AppNavigation() {
@@ -47,7 +64,18 @@ fun AppNavigation() {
         if (target != null && target != currentRoute) navController.navigateAndClear(target)
     }
 
-    NavHost(navController, startDestination) {
+    Scaffold(
+        bottomBar = {
+            if (currentRoute in bottomRoutes) {
+                AppBottomNavigation(currentRoute, navController::navigateToBottomRoute)
+            }
+        }
+    ) { innerPadding ->
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+        modifier = Modifier.padding(innerPadding)
+    ) {
         composable(Routes.LOGIN) {
             val vm: LoginViewModel = viewModel(factory = factory)
             val state by vm.uiState.collectAsStateWithLifecycle()
@@ -78,7 +106,27 @@ fun AppNavigation() {
         composable(Routes.DASHBOARD) {
             val vm: DashboardViewModel = viewModel(factory = factory)
             val state by vm.uiState.collectAsStateWithLifecycle()
-            DashboardScreen(state) { navController.navigate(Routes.ACCOUNT) }
+            DashboardScreen(state)
+        }
+        composable(Routes.MOVEMENTS) {
+            val vm: MovementsViewModel = viewModel(factory = factory)
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            MovementsScreen(state)
+        }
+        composable(Routes.BUSINESS) {
+            val vm: BusinessViewModel = viewModel(factory = factory)
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            BusinessScreen(state)
+        }
+        composable(Routes.AI) {
+            val vm: AiViewModel = viewModel(factory = factory)
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            AiScreen(state)
+        }
+        composable(Routes.PROFILE) {
+            val vm: ProfileViewModel = viewModel(factory = factory)
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            ProfileScreen(state) { navController.navigate(Routes.ACCOUNT) }
         }
         composable(Routes.ACCOUNT) {
             val vm: AccountViewModel = viewModel(factory = factory)
@@ -88,6 +136,7 @@ fun AppNavigation() {
                 navController::popBackStack
             )
         }
+    }
     }
 }
 
@@ -101,6 +150,10 @@ private class AppViewModelFactory(private val authRepository: AuthRepository) : 
         modelClass.isAssignableFrom(VerifyEmailViewModel::class.java) -> VerifyEmailViewModel(authRepository)
         modelClass.isAssignableFrom(AccountViewModel::class.java) -> AccountViewModel(authRepository)
         modelClass.isAssignableFrom(DashboardViewModel::class.java) -> DashboardViewModel(authRepository)
+        modelClass.isAssignableFrom(MovementsViewModel::class.java) -> MovementsViewModel()
+        modelClass.isAssignableFrom(BusinessViewModel::class.java) -> BusinessViewModel()
+        modelClass.isAssignableFrom(AiViewModel::class.java) -> AiViewModel()
+        modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository)
         else -> throw IllegalArgumentException("ViewModel desconocido: ${modelClass.name}")
     } as T
 }
@@ -114,3 +167,41 @@ private fun NavHostController.navigateAndClear(route: String) {
 
 private val publicRoutes = setOf(Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)
 private val authRoutes = publicRoutes + Routes.VERIFY_EMAIL
+
+private data class BottomDestination(
+    val route: String,
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+private val bottomDestinations = listOf(
+    BottomDestination(Routes.DASHBOARD, "Inicio", Icons.Default.Home),
+    BottomDestination(Routes.MOVEMENTS, "Movimientos", Icons.Default.ReceiptLong),
+    BottomDestination(Routes.BUSINESS, "Negocio", Icons.Default.Business),
+    BottomDestination(Routes.AI, "IA", Icons.Default.AutoAwesome),
+    BottomDestination(Routes.PROFILE, "Perfil", Icons.Default.AccountCircle)
+)
+
+private val bottomRoutes = bottomDestinations.mapTo(mutableSetOf()) { it.route }
+
+@Composable
+private fun AppBottomNavigation(currentRoute: String?, onNavigate: (String) -> Unit) {
+    NavigationBar {
+        bottomDestinations.forEach { destination ->
+            NavigationBarItem(
+                selected = currentRoute == destination.route,
+                onClick = { onNavigate(destination.route) },
+                icon = { Icon(destination.icon, contentDescription = destination.label) },
+                label = { Text(destination.label) }
+            )
+        }
+    }
+}
+
+private fun NavHostController.navigateToBottomRoute(route: String) {
+    navigate(route) {
+        popUpTo(Routes.DASHBOARD) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}

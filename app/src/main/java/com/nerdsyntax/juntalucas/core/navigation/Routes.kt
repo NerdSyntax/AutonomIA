@@ -5,6 +5,14 @@ object Routes {
     const val REGISTER = "register"
     const val FORGOT_PASSWORD = "forgot_password"
     const val VERIFY_EMAIL = "verify_email"
-    const val DASHBOARD = "dashboard"
+
+    // Menú inferior
+    const val DASHBOARD = "dashboard"      // Inicio
+    const val MOVEMENTS = "movements"      // Movimientos
+    const val BUSINESS = "business"        // Negocio
+    const val AI = "ai"                    // IA
+    const val PROFILE = "profile"          // Perfil
+
+    // Otras pantallas
     const val ACCOUNT = "account"
 }
