@@ -28,6 +28,8 @@ import com.nerdsyntax.juntalucas.feature.auth.ui.login.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.recovery.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.register.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.verify.*
+import com.nerdsyntax.juntalucas.feature.auth.ui.welcome.*
+import com.nerdsyntax.juntalucas.feature.onboarding.ui.*
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.*
 import com.nerdsyntax.juntalucas.feature.movements.ui.*
 import com.nerdsyntax.juntalucas.feature.business.ui.*
@@ -43,20 +45,23 @@ fun AppNavigation() {
     val session by sessionViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val startDestination = remember {
-        when {
-            !session.isAuthenticated -> Routes.LOGIN
-            !session.isEmailVerified -> Routes.VERIFY_EMAIL
-            else -> Routes.DASHBOARD
-        }
-    }
+
+    val startDestination = "splash"
 
     LaunchedEffect(session.currentUser, currentRoute) {
-        if (currentRoute == null) return@LaunchedEffect
+        if (currentRoute == null || currentRoute == "splash") return@LaunchedEffect
+
+        val bypassRoutes = setOf(
+            "business_info", "activity_selection", "starting_point",
+            Routes.DASHBOARD, Routes.MOVEMENTS, Routes.BUSINESS, Routes.AI, Routes.PROFILE
+        )
+
         val target = when {
-            !session.isAuthenticated && currentRoute !in publicRoutes -> Routes.LOGIN
-            session.isAuthenticated && !session.isEmailVerified && currentRoute != Routes.VERIFY_EMAIL ->
+            !session.isAuthenticated && currentRoute !in publicRoutes -> "welcome"
+
+            session.isAuthenticated && !session.isEmailVerified && currentRoute != Routes.VERIFY_EMAIL && currentRoute !in bypassRoutes ->
                 Routes.VERIFY_EMAIL
+
             session.isAuthenticated && session.isEmailVerified && currentRoute in authRoutes ->
                 Routes.DASHBOARD
             else -> null
@@ -71,72 +76,163 @@ fun AppNavigation() {
             }
         }
     ) { innerPadding ->
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        modifier = Modifier.padding(innerPadding)
-    ) {
-        composable(Routes.LOGIN) {
-            val vm: LoginViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            LoginScreen(
-                state, vm::onEmailChange, vm::onPasswordChange, vm::login,
-                onRegisterClick = { navController.navigate(Routes.REGISTER) },
-                onForgotPasswordClick = { navController.navigate(Routes.FORGOT_PASSWORD) }
-            )
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+
+            composable("splash") {
+                SplashScreen(
+                    onTimeout = {
+                        val nextRoute = when {
+                            !session.isAuthenticated -> "welcome"
+                            !session.isEmailVerified -> Routes.VERIFY_EMAIL
+                            else -> Routes.DASHBOARD
+                        }
+                        navController.navigate(nextRoute) {
+                            popUpTo("splash") { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable("welcome") {
+                WelcomeScreen(
+                    onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
+                    onNavigateToLogin = { navController.navigate(Routes.LOGIN) }
+                )
+            }
+
+
+            composable(Routes.LOGIN) {
+                val vm: LoginViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                LoginScreen(
+                    state, vm::onEmailChange, vm::onPasswordChange, vm::login,
+                    onForgotPasswordClick = { navController.navigate(Routes.FORGOT_PASSWORD) },
+                    onRegisterClick = { navController.navigate(Routes.REGISTER) }
+                )
+            }
+            composable(Routes.REGISTER) {
+                val vm: RegisterViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                RegisterScreen(
+                    state, vm::onEmailChange, vm::onPasswordChange, vm::onConfirmPasswordChange,
+                    vm::register, navController::popBackStack
+                )
+            }
+            composable(Routes.FORGOT_PASSWORD) {
+                val vm: ForgotPasswordViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                ForgotPasswordScreen(state, vm::onEmailChange, vm::sendReset, navController::popBackStack)
+            }
+
+            composable(Routes.VERIFY_EMAIL) {
+                val vm: VerifyEmailViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                VerifyEmailScreen(
+                    state = state,
+                    onCheckVerification = {
+                        navController.navigate("business_info") {
+                            popUpTo(Routes.VERIFY_EMAIL) { inclusive = true }
+                        }
+                    },
+                    onResendVerification = vm::resendVerification,
+                    onLogout = vm::logout
+                )
+            }
+
+
+            composable("business_info") {
+                val vm: OnboardingViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                BusinessInfoScreen(
+                    state = state,
+                    onNombreChange = vm::onNombreChange,
+                    onRubroChange = vm::onRubroChange,
+                    onRegionChange = vm::onRegionChange,
+                    onComunaChange = vm::onComunaChange,
+                    onMetaChange = vm::onMetaChange,
+                    onContinueClick = {
+                        if (vm.validarPaso1()) {
+                            navController.navigate("activity_selection")
+                        }
+                    }
+                )
+            }
+
+            composable("activity_selection") { navBackStackEntry ->
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry("business_info") }
+                val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                ActivitySelectionScreen(
+                    state = state,
+                    onTipoActividadChange = vm::onTipoActividadChange,
+                    onNavigateBack = { navController.popBackStack() },
+                    onContinueClick = { navController.navigate("starting_point") }
+                )
+            }
+
+            composable("starting_point") { navBackStackEntry ->
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry("business_info") }
+                val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                StartingPointScreen(
+                    state = state,
+                    onPuntoPartidaChange = vm::onPuntoPartidaChange,
+                    onNavigateBack = { navController.popBackStack() },
+                    onFinishSetup = {
+                        vm.finalizarConfiguracion {
+                            navController.navigate(Routes.DASHBOARD) {
+                                popUpTo("business_info") { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+
+
+            composable(Routes.DASHBOARD) {
+                val vm: DashboardViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+
+                DashboardScreen(
+                    state = state,
+                    onNavigateToAi = {
+                        navController.navigateToBottomRoute(Routes.AI)
+                    }
+                )
+            }
+            composable(Routes.MOVEMENTS) {
+                val vm: MovementsViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                MovementsScreen(state)
+            }
+            composable(Routes.BUSINESS) {
+                val vm: BusinessViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                BusinessScreen(state)
+            }
+            composable(Routes.AI) {
+                val vm: AiViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                AiScreen(state)
+            }
+            composable(Routes.PROFILE) {
+                val vm: ProfileViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                ProfileScreen(state) { navController.navigate(Routes.ACCOUNT) }
+            }
+            composable(Routes.ACCOUNT) {
+                val vm: AccountViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                AccountScreen(
+                    state, vm::sendPasswordReset, vm::logout, vm::deleteAccount,
+                    navController::popBackStack
+                )
+            }
         }
-        composable(Routes.REGISTER) {
-            val vm: RegisterViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            RegisterScreen(
-                state, vm::onEmailChange, vm::onPasswordChange, vm::onConfirmPasswordChange,
-                vm::register, navController::popBackStack
-            )
-        }
-        composable(Routes.FORGOT_PASSWORD) {
-            val vm: ForgotPasswordViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            ForgotPasswordScreen(state, vm::onEmailChange, vm::sendReset, navController::popBackStack)
-        }
-        composable(Routes.VERIFY_EMAIL) {
-            val vm: VerifyEmailViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            VerifyEmailScreen(state, vm::checkVerification, vm::resendVerification, vm::logout)
-        }
-        composable(Routes.DASHBOARD) {
-            val vm: DashboardViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            DashboardScreen(state)
-        }
-        composable(Routes.MOVEMENTS) {
-            val vm: MovementsViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            MovementsScreen(state)
-        }
-        composable(Routes.BUSINESS) {
-            val vm: BusinessViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            BusinessScreen(state)
-        }
-        composable(Routes.AI) {
-            val vm: AiViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            AiScreen(state)
-        }
-        composable(Routes.PROFILE) {
-            val vm: ProfileViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            ProfileScreen(state) { navController.navigate(Routes.ACCOUNT) }
-        }
-        composable(Routes.ACCOUNT) {
-            val vm: AccountViewModel = viewModel(factory = factory)
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            AccountScreen(
-                state, vm::sendPasswordReset, vm::logout, vm::deleteAccount,
-                navController::popBackStack
-            )
-        }
-    }
     }
 }
 
@@ -154,6 +250,7 @@ private class AppViewModelFactory(private val authRepository: AuthRepository) : 
         modelClass.isAssignableFrom(BusinessViewModel::class.java) -> BusinessViewModel()
         modelClass.isAssignableFrom(AiViewModel::class.java) -> AiViewModel()
         modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository)
+        modelClass.isAssignableFrom(OnboardingViewModel::class.java) -> OnboardingViewModel()
         else -> throw IllegalArgumentException("ViewModel desconocido: ${modelClass.name}")
     } as T
 }
@@ -165,7 +262,7 @@ private fun NavHostController.navigateAndClear(route: String) {
     }
 }
 
-private val publicRoutes = setOf(Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)
+private val publicRoutes = setOf(Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, "splash", "welcome")
 private val authRoutes = publicRoutes + Routes.VERIFY_EMAIL
 
 private data class BottomDestination(
