@@ -2,6 +2,8 @@ package com.nerdsyntax.juntalucas.feature.auth.data
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.CancellationException
 import com.nerdsyntax.juntalucas.feature.auth.domain.model.AuthUser
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,17 @@ class FirebaseAuthRepository(
         val user = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await().user
             ?: error("No se pudo obtener el usuario.")
         user.toAuthUser().also { _currentUser.value = it }
+    }
+
+    override suspend fun loginWithGoogle(idToken: String): Result<AuthUser> = try {
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        val user = firebaseAuth.signInWithCredential(credential).await().user
+            ?: error("No se pudo obtener el usuario de Google.")
+        Result.success(user.toAuthUser().also { _currentUser.value = it })
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        Result.failure(error)
     }
 
     override suspend fun register(email: String, password: String): Result<AuthUser> = runCatching {
@@ -65,6 +78,8 @@ class FirebaseAuthRepository(
     private fun FirebaseUser.toAuthUser() = AuthUser(
         uid = uid,
         email = email.orEmpty(),
-        isEmailVerified = isEmailVerified
+        isEmailVerified = isEmailVerified,
+        displayName = displayName,
+        photoUrl = photoUrl?.toString()
     )
 }

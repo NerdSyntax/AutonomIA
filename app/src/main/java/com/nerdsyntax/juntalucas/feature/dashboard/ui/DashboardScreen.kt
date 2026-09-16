@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.NumberFormat
+import java.util.Locale
 
 
 private val DarkBlue = Color(0xFF0F2A4A)
@@ -54,13 +56,13 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             GoalSection(state)
             KpiGridSection(state)
 
             AiBannerSection(onClick = onNavigateToAi)
 
             RecentMovementsSection(state.movimientosRecientes)
-            QuickAccessSection()
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -82,9 +84,9 @@ private fun HeaderSection(state: DashboardUiState) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text("Hola, ${state.userName} \uD83D\uDC4B", color = Color.LightGray, fontSize = 14.sp)
-                Text(state.businessName, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Hola, ${state.userEmail}", color = Color.LightGray, fontSize = 14.sp)
+                Text(state.nombreNegocio, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 IconButton(onClick = { }, modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape).size(40.dp)) {
@@ -105,7 +107,7 @@ private fun HeaderSection(state: DashboardUiState) {
         ) {
             Text("Semana", color = Color.Gray, fontSize = 14.sp)
             Box(modifier = Modifier.background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text("Agosto 2026", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Mes actual", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
             Text("Personalizado", color = Color.Gray, fontSize = 14.sp)
         }
@@ -114,6 +116,9 @@ private fun HeaderSection(state: DashboardUiState) {
 
 @Composable
 private fun GoalSection(state: DashboardUiState) {
+    val progress = if (state.metaMensual > 0) {
+        (state.ventasTotales.toDouble() / state.metaMensual).coerceIn(0.0, 1.0).toFloat()
+    } else 0f
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -122,19 +127,19 @@ private fun GoalSection(state: DashboardUiState) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Meta mensual de ventas", color = Color.Gray, fontSize = 14.sp)
-                Text("90%", color = DarkBlue, fontWeight = FontWeight.Bold)
+                Text("${(progress * 100).toInt()}%", color = DarkBlue, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { 0.9f },
+                progress = { progress },
                 modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                 color = PurpleAi,
                 trackColor = Color(0xFFE2E8F0)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("$1.800.000 alcanzados", color = Color.Gray, fontSize = 12.sp)
-                Text("Meta: $2.000.000", color = Color.LightGray, fontSize = 12.sp)
+                Text("${formatPesos(state.ventasTotales)} alcanzados", color = Color.Gray, fontSize = 12.sp)
+                Text("Meta: ${if (state.errorMessage == null) formatPesos(state.metaMensual) else "—"}", color = Color.LightGray, fontSize = 12.sp)
             }
         }
     }
@@ -147,12 +152,12 @@ private fun KpiGridSection(state: DashboardUiState) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         KpiCard(
-            modifier = Modifier.weight(1f), title = "Ventas totales", amount = state.ventasTotales,
-            trend = "▲ 12,5% vs jul.", trendColor = GreenPos, icon = Icons.Default.ArrowUpward
+            modifier = Modifier.weight(1f), title = "Ventas totales", amount = formatPesos(state.ventasTotales),
+            iconColor = GreenPos, icon = Icons.Default.ArrowUpward
         )
         KpiCard(
-            modifier = Modifier.weight(1f), title = "Gastos totales", amount = state.gastosTotales,
-            trend = "▼ 21,7% vs jul.", trendColor = RedNeg, icon = Icons.Default.ArrowDownward
+            modifier = Modifier.weight(1f), title = "Gastos totales", amount = formatPesos(state.gastosTotales),
+            iconColor = RedNeg, icon = Icons.Default.ArrowDownward
         )
     }
     Row(
@@ -160,20 +165,20 @@ private fun KpiGridSection(state: DashboardUiState) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         KpiCard(
-            modifier = Modifier.weight(1f), title = "Ganancia", amount = state.ganancia,
-            trend = "▼ 25,8% vs jul.", trendColor = RedNeg, icon = Icons.Default.QueryBuilder, amountColor = OrangeWarn
+            modifier = Modifier.weight(1f), title = "Ganancia", amount = formatPesos(state.ganancia),
+            iconColor = RedNeg, icon = Icons.Default.QueryBuilder, amountColor = OrangeWarn
         )
         KpiCard(
             modifier = Modifier.weight(1f), title = "Margen", amount = state.margen,
-            trend = "▼ 4,1pp vs jul.", trendColor = RedNeg, icon = Icons.Default.ShowChart, amountColor = OrangeWarn
+            iconColor = RedNeg, icon = Icons.Default.ShowChart, amountColor = OrangeWarn
         )
     }
 }
 
 @Composable
 private fun KpiCard(
-    modifier: Modifier, title: String, amount: String, trend: String,
-    trendColor: Color, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier, title: String, amount: String,
+    iconColor: Color, icon: androidx.compose.ui.graphics.vector.ImageVector,
     amountColor: Color = GreenPos
 ) {
     Card(
@@ -184,12 +189,10 @@ private fun KpiCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, color = Color.Gray, fontSize = 12.sp)
-                Icon(icon, contentDescription = null, tint = trendColor, modifier = Modifier.size(16.dp))
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(16.dp))
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(amount, color = if(title == "Gastos totales") RedNeg else amountColor, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(trend, color = trendColor, fontSize = 11.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -234,6 +237,9 @@ private fun RecentMovementsSection(movimientos: List<MovimientoUi>) {
             }
             Spacer(modifier = Modifier.height(16.dp))
 
+            if (movimientos.isEmpty()) {
+                Text("Aún no tienes movimientos registrados.", color = Color.Gray, fontSize = 14.sp)
+            }
             movimientos.forEach { mov ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -258,34 +264,4 @@ private fun RecentMovementsSection(movimientos: List<MovimientoUi>) {
     }
 }
 
-@Composable
-private fun QuickAccessSection() {
-    Column {
-        Text("Accesos rápidos", fontWeight = FontWeight.Bold, color = DarkBlue, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickButton(modifier = Modifier.weight(1f), text = "Registrar venta", icon = "💰", bgColor = Color(0xFFECFDF5), textColor = GreenPos)
-            QuickButton(modifier = Modifier.weight(1f), text = "Registrar gasto", icon = "🧾", bgColor = Color(0xFFFEF2F2), textColor = RedNeg)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickButton(modifier = Modifier.weight(1f), text = "Agregar producto", icon = "📦", bgColor = Color(0xFFF0F4FA), textColor = DarkBlue)
-            QuickButton(modifier = Modifier.weight(1f), text = "Importar ventas", icon = "📁", bgColor = Color(0xFFF3E8FF), textColor = PurpleAi)
-        }
-    }
-}
-
-@Composable
-private fun QuickButton(modifier: Modifier, text: String, icon: String, bgColor: Color, textColor: Color) {
-    Box(
-        modifier = modifier
-            .background(bgColor, RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Text(icon, fontSize = 18.sp)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text, color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-    }
-}
+private fun formatPesos(amount: Long): String = "$" + NumberFormat.getIntegerInstance(Locale.forLanguageTag("es-CL")).format(amount)

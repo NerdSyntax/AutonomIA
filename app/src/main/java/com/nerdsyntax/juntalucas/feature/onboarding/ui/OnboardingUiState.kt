@@ -16,5 +16,6 @@ data class OnboardingUiState(
 
     //Estado general
     val isLoading: Boolean = false,
+    val isSuccess: Boolean = false,
     val errorMessage: String? = null
 )

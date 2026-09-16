@@ -28,7 +28,8 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onLoginClick: () -> Unit,
     onForgotPasswordClick: () -> Unit,
-    onRegisterClick: () -> Unit
+    onRegisterClick: () -> Unit,
+    onGoogleClick: () -> Unit
 ) {
     val darkBlue = Color(0xFF0F2A4A)
     val highlightPurple = Color(0xFF8B5CF6)
@@ -144,7 +145,7 @@ fun LoginScreen(
                     color = darkBlue,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onForgotPasswordClick() }
+                    modifier = Modifier.clickable(enabled = !state.isLoading) { onForgotPasswordClick() }
                 )
             }
 
@@ -183,7 +184,8 @@ fun LoginScreen(
 
 
             OutlinedButton(
-                onClick = { /* TODO: Lógica de Google Sign In */ },
+                onClick = onGoogleClick,
+                enabled = !state.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),

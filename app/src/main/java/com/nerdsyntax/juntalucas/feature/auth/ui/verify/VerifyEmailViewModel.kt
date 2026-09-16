@@ -17,14 +17,47 @@ class VerifyEmailViewModel(private val authRepository: AuthRepository) : ViewMod
     init {
         viewModelScope.launch {
             authRepository.currentUser.collectLatest { user ->
-                _uiState.update { it.copy(currentUser = user) }
+                _uiState.update {
+                    it.copy(
+                        currentUser = user,
+                        isVerificationConfirmed = it.isVerificationConfirmed &&
+                            user?.isEmailVerified == true && user.uid == it.currentUser?.uid
+                    )
+                }
             }
         }
     }
 
-    fun checkVerification() = runOperation {
-        authRepository.reloadCurrentUser().map { user ->
-            if (user?.isEmailVerified == false) "El correo todavía no ha sido verificado." else null
+    fun checkVerification() {
+        if (_uiState.value.isLoading) return
+        _uiState.update {
+            it.copy(isLoading = true, isVerificationConfirmed = false, successMessage = null, errorMessage = null)
+        }
+        viewModelScope.launch {
+            authRepository.reloadCurrentUser()
+                .onSuccess { user ->
+                    val sameUser = user != null && user.uid == authRepository.currentUser.value?.uid
+                    val verified = sameUser && user?.isEmailVerified == true
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isVerificationConfirmed = verified,
+                            errorMessage = when {
+                                !sameUser -> "Tu sesión terminó. Vuelve a iniciar sesión."
+                                !verified -> "Tu correo aún no ha sido verificado. Revisa tu bandeja de entrada e inténtalo nuevamente."
+                                else -> null
+                            }
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "No pudimos comprobar tu correo. Revisa tu conexión e inténtalo nuevamente."
+                        )
+                    }
+                }
         }
     }
 

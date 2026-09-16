@@ -1,16 +1,16 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 data class DashboardUiState(
-    val userName: String = "",
-    val businessName: String = "",
-    val metaVentasMensual: Int = 0,
-    val ventasAlcanzadas: Int = 0,
-    val ventasTotales: String = "",
-    val gastosTotales: String = "",
-    val ganancia: String = "",
-    val margen: String = "",
+    val userEmail: String = "",
+    val nombreNegocio: String = "",
+    val metaMensual: Long = 0,
+    val ventasTotales: Long = 0,
+    val gastosTotales: Long = 0,
+    val ganancia: Long = 0,
+    val margen: String = "—",
     val movimientosRecientes: List<MovimientoUi> = emptyList(),
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
 )
 
 data class MovimientoUi(

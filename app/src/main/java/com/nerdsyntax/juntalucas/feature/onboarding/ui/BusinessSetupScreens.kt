@@ -156,19 +156,19 @@ fun StartingPointScreen(
                 title = "Registrar manualmente",
                 description = "Agrega ventas y gastos uno por uno desde la app.",
                 isSelected = state.puntoPartida == "manual",
-                onClick = { onPuntoPartidaChange("manual") }
+                onClick = { if (!state.isLoading) onPuntoPartidaChange("manual") }
             )
             SelectableCard(
                 title = "Importar desde archivo",
                 description = "Sube un archivo CSV o Excel con tus ventas anteriores.",
                 isSelected = state.puntoPartida == "importar",
-                onClick = { onPuntoPartidaChange("importar") }
+                onClick = { if (!state.isLoading) onPuntoPartidaChange("importar") }
             )
             SelectableCard(
                 title = "Comenzar con datos de ejemplo",
                 description = "Explora la app con información ficticia para entender cómo funciona.",
                 isSelected = state.puntoPartida == "ejemplo",
-                onClick = { onPuntoPartidaChange("ejemplo") }
+                onClick = { if (!state.isLoading) onPuntoPartidaChange("ejemplo") }
             )
 
             Card(
@@ -185,6 +185,8 @@ fun StartingPointScreen(
             }
 
             Spacer(modifier = Modifier.weight(1f))
+
+            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             Button(
                 onClick = onFinishSetup,
