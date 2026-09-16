@@ -226,8 +226,30 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: MovementsViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                MovementsScreen(state)
+                MovementsScreen(
+                    state = state,
+                    onTabSelected = vm::onTabSelected,
+                    onSearchChange = vm::onSearchChange,
+                    onFilterSelected = vm::onFilterSelected,
+                    onAddClick = { isSale ->
+                        navController.navigate(if (isSale) "add_movement" else "add_expense")
+                    }
+                )
             }
+            composable("add_movement") {
+                if (!session.canAccessDashboard) return@composable
+                AddMovementScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable("add_expense") {
+                if (!session.canAccessDashboard) return@composable
+                AddExpenseScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             composable(Routes.BUSINESS) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: BusinessViewModel = viewModel(factory = factory)
