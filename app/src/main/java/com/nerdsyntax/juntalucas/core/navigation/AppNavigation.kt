@@ -53,7 +53,8 @@ fun AppNavigation() {
 
         val bypassRoutes = setOf(
             "business_info", "activity_selection", "starting_point",
-            Routes.DASHBOARD, Routes.MOVEMENTS, Routes.BUSINESS, Routes.AI, Routes.PROFILE
+            Routes.DASHBOARD, Routes.MOVEMENTS, Routes.BUSINESS, Routes.AI, Routes.PROFILE,
+            "add_movement", "add_expense"
         )
 
         val target = when {
@@ -104,7 +105,6 @@ fun AppNavigation() {
                 )
             }
 
-
             composable(Routes.LOGIN) {
                 val vm: LoginViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -114,6 +114,7 @@ fun AppNavigation() {
                     onRegisterClick = { navController.navigate(Routes.REGISTER) }
                 )
             }
+
             composable(Routes.REGISTER) {
                 val vm: RegisterViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -122,6 +123,7 @@ fun AppNavigation() {
                     vm::register, navController::popBackStack
                 )
             }
+
             composable(Routes.FORGOT_PASSWORD) {
                 val vm: ForgotPasswordViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -142,7 +144,6 @@ fun AppNavigation() {
                     onLogout = vm::logout
                 )
             }
-
 
             composable("business_info") {
                 val vm: OnboardingViewModel = viewModel(factory = factory)
@@ -192,7 +193,6 @@ fun AppNavigation() {
                 )
             }
 
-
             composable(Routes.DASHBOARD) {
                 val vm: DashboardViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -204,26 +204,52 @@ fun AppNavigation() {
                     }
                 )
             }
+
             composable(Routes.MOVEMENTS) {
                 val vm: MovementsViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                MovementsScreen(state)
+
+                MovementsScreen(
+                    state = state,
+                    onTabSelected = vm::onTabSelected,
+                    onSearchChange = vm::onSearchChange,
+                    onFilterSelected = vm::onFilterSelected,
+                    onAddClick = { isSale ->
+                        navController.navigate(if (isSale) "add_movement" else "add_expense")
+                    }
+                )
             }
+
+            composable("add_movement") {
+                AddMovementScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable("add_expense") {
+                AddExpenseScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             composable(Routes.BUSINESS) {
                 val vm: BusinessViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 BusinessScreen(state)
             }
+
             composable(Routes.AI) {
                 val vm: AiViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 AiScreen(state)
             }
+
             composable(Routes.PROFILE) {
                 val vm: ProfileViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 ProfileScreen(state) { navController.navigate(Routes.ACCOUNT) }
             }
+
             composable(Routes.ACCOUNT) {
                 val vm: AccountViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()

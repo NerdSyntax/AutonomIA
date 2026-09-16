@@ -1,7 +1,7 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable // Importante para el clic
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -199,11 +199,11 @@ private fun AiBannerSection(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)) // Mantiene el efecto del clic dentro de los bordes redondeados
+            .clip(RoundedCornerShape(16.dp))
             .background(
                 brush = Brush.horizontalGradient(listOf(Color(0xFF6366F1), Color(0xFF9333EA)))
             )
-            .clickable { onClick() } // Permite que el banner detecte el clic
+            .clickable { onClick() }
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
