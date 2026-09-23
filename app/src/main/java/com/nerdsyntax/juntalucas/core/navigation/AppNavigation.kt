@@ -254,8 +254,28 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: BusinessViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                BusinessScreen(state)
+
+                BusinessScreen(
+                    state = state,
+                    onTabSelected = vm::onTabSelected,
+                    onSearchChange = vm::onSearchChange,
+                    onFilterSelected = vm::onFilterSelected,
+                    onAddClick = { navController.navigate("add_product") }
+                )
             }
+
+            composable("add_product") {
+                if (!session.canAccessDashboard) return@composable
+                val vm: AddProductViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+
+                AddProductScreen(
+                    state = state,
+                    vm = vm,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             composable(Routes.AI) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AiViewModel = viewModel(factory = factory)
@@ -296,6 +316,7 @@ private class AppViewModelFactory(
         modelClass.isAssignableFrom(DashboardViewModel::class.java) -> DashboardViewModel(authRepository, businessRepository)
         modelClass.isAssignableFrom(MovementsViewModel::class.java) -> MovementsViewModel()
         modelClass.isAssignableFrom(BusinessViewModel::class.java) -> BusinessViewModel()
+        modelClass.isAssignableFrom(AddProductViewModel::class.java) -> AddProductViewModel()
         modelClass.isAssignableFrom(AiViewModel::class.java) -> AiViewModel()
         modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository)
         modelClass.isAssignableFrom(OnboardingViewModel::class.java) -> OnboardingViewModel(businessRepository)
@@ -309,10 +330,6 @@ private fun NavHostController.navigateAndClear(route: String) {
         launchSingleTop = true
     }
 }
-
-
-
-
 
 private data class BottomDestination(
     val route: String,
