@@ -9,31 +9,19 @@ import androidx.compose.material3.Button
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.nerdsyntax.juntalucas.core.session.BusinessSetupStatus
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.nerdsyntax.juntalucas.core.session.SessionViewModel
 import com.nerdsyntax.juntalucas.di.AppContainer
-import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
-import com.nerdsyntax.juntalucas.feature.auth.data.FirebaseAuthRepository
-import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
+import com.nerdsyntax.juntalucas.di.AppViewModelFactory
+import com.nerdsyntax.juntalucas.di.ProductViewModelFactory
 import com.nerdsyntax.juntalucas.feature.auth.ui.account.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.login.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.recovery.*
@@ -43,26 +31,28 @@ import com.nerdsyntax.juntalucas.feature.auth.ui.welcome.*
 import com.nerdsyntax.juntalucas.feature.onboarding.ui.*
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.*
 import com.nerdsyntax.juntalucas.feature.movements.ui.*
+import com.nerdsyntax.juntalucas.feature.movements.domain.PaymentMethod
 import com.nerdsyntax.juntalucas.feature.business.ui.*
+import com.nerdsyntax.juntalucas.feature.business.ui.product.*
 import com.nerdsyntax.juntalucas.feature.ai.ui.*
 import com.nerdsyntax.juntalucas.feature.profile.ui.*
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    val authRepository: AuthRepository = remember { FirebaseAuthRepository() }
+    val authRepository = AppContainer.authRepository
     val factory = remember(authRepository) { AppViewModelFactory(authRepository, AppContainer.businessRepository) }
     val sessionViewModel: SessionViewModel = viewModel(factory = factory)
     val session by sessionViewModel.uiState.collectAsStateWithLifecycle()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    val startDestination = "splash"
+    val startDestination = Routes.SPLASH
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { sessionViewModel.refreshBusiness() }
 
     LaunchedEffect(session, currentRoute) {
-        if (currentRoute == null || currentRoute == "splash") return@LaunchedEffect
+        if (currentRoute == null || currentRoute == Routes.SPLASH) return@LaunchedEffect
 
         val target = sessionDestination(session, currentRoute)
         if (target != null && target != currentRoute) navController.navigateAndClear(target)
@@ -81,22 +71,22 @@ fun AppNavigation() {
             modifier = Modifier.padding(innerPadding)
         ) {
 
-            composable("splash") {
+            composable(Routes.SPLASH) {
                 SplashScreen(
                     onTimeout = {
                         val nextRoute = when {
-                            !session.isAuthenticated -> "welcome"
+                            !session.isAuthenticated -> Routes.WELCOME
                             !session.isEmailVerified -> Routes.VERIFY_EMAIL
-                            else -> "session_check"
+                            else -> Routes.SESSION_CHECK
                         }
                         navController.navigate(nextRoute) {
-                            popUpTo("splash") { inclusive = true }
+                            popUpTo(Routes.SPLASH) { inclusive = true }
                         }
                     }
                 )
             }
 
-            composable("session_check") {
+            composable(Routes.SESSION_CHECK) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                     verticalArrangement = Arrangement.Center,
@@ -112,7 +102,7 @@ fun AppNavigation() {
                     }
                 }
             }
-            composable("welcome") {
+            composable(Routes.WELCOME) {
                 WelcomeScreen(
                     onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
                     onNavigateToLogin = { navController.navigate(Routes.LOGIN) }
@@ -158,7 +148,7 @@ fun AppNavigation() {
             }
 
 
-            composable("business_info") {
+            composable(Routes.BUSINESS_INFO) {
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
                 val vm: OnboardingViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -171,33 +161,33 @@ fun AppNavigation() {
                     onMetaChange = vm::onMetaChange,
                     onContinueClick = {
                         if (vm.validarPaso1()) {
-                            navController.navigate("activity_selection")
+                            navController.navigate(Routes.ACTIVITY_SELECTION)
                         }
                     }
                 )
             }
 
-            composable("activity_selection") { navBackStackEntry ->
+            composable(Routes.ACTIVITY_SELECTION) { navBackStackEntry ->
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
-                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry("business_info") }
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.BUSINESS_INFO) }
                 val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 ActivitySelectionScreen(
                     state = state,
                     onTipoActividadChange = vm::onTipoActividadChange,
                     onNavigateBack = { navController.popBackStack() },
-                    onContinueClick = { navController.navigate("starting_point") }
+                    onContinueClick = { navController.navigate(Routes.STARTING_POINT) }
                 )
             }
 
-            composable("starting_point") { navBackStackEntry ->
+            composable(Routes.STARTING_POINT) { navBackStackEntry ->
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
-                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry("business_info") }
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.BUSINESS_INFO) }
                 val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(state.isSuccess) {
                     if (state.isSuccess) {
-                        navController.navigateAndClear("session_check")
+                        navController.navigateAndClear(Routes.SESSION_CHECK)
                         sessionViewModel.refreshBusiness()
                     }
                 }
@@ -214,12 +204,18 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: DashboardViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
                 DashboardScreen(
                     state = state,
                     onNavigateToAi = {
                         navController.navigateToBottomRoute(Routes.AI)
-                    }
+                    },
+                    onFilterSelected = vm::selectFilter,
+                    onCustomStart = vm::onCustomStart,
+                    onCustomEnd = vm::onCustomEnd,
+                    onRetry = vm::refresh,
+                    onViewAll = { navController.navigateToBottomRoute(Routes.MOVEMENTS) }
                 )
             }
             composable(Routes.MOVEMENTS) {
@@ -231,21 +227,53 @@ fun AppNavigation() {
                     onTabSelected = vm::onTabSelected,
                     onSearchChange = vm::onSearchChange,
                     onFilterSelected = vm::onFilterSelected,
+                    onRetry = vm::retry,
+                    onChangeMonth = vm::changeMonth,
                     onAddClick = { isSale ->
-                        navController.navigate(if (isSale) "add_movement" else "add_expense")
+                        navController.navigate(if (isSale) Routes.ADD_SALE else Routes.ADD_EXPENSE)
                     }
                 )
             }
-            composable("add_movement") {
+            composable(Routes.ADD_SALE) {
                 if (!session.canAccessDashboard) return@composable
-                AddMovementScreen(
+                val vm: AddSaleViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(state.isSuccess) {
+                    if (state.isSuccess) navController.popBackStack()
+                }
+                AddSaleScreen(
+                    state = state,
+                    onDateChange = vm::onDateChange,
+                    onProductSelected = vm::onProductSelected,
+                    onQuantityChange = vm::onQuantityChange,
+                    onPriceChange = vm::onPriceChange,
+                    onDiscountChange = vm::onDiscountChange,
+                    onPaymentChange = vm::onPaymentChange,
+                    onNoteChange = vm::onNoteChange,
+                    onRetryCatalog = vm::retryCatalog,
+                    onCreateProduct = { navController.navigate(Routes.ADD_PRODUCT) },
+                    onSave = vm::save,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
 
-            composable("add_expense") {
+            composable(Routes.ADD_EXPENSE) {
                 if (!session.canAccessDashboard) return@composable
+                val vm: AddExpenseViewModel = viewModel(factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(state.isSuccess) {
+                    if (state.isSuccess) navController.popBackStack()
+                }
                 AddExpenseScreen(
+                    state = state,
+                    onDescriptionChange = vm::onDescriptionChange,
+                    onCategoryChange = vm::onCategoryChange,
+                    onAmountChange = vm::onAmountChange,
+                    onDateChange = vm::onDateChange,
+                    onTypeChange = vm::onTypeChange,
+                    onPaymentChange = vm::onPaymentChange,
+                    onNoteChange = vm::onNoteChange,
+                    onSave = vm::save,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -254,24 +282,69 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: BusinessViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-
                 BusinessScreen(
                     state = state,
                     onTabSelected = vm::onTabSelected,
                     onSearchChange = vm::onSearchChange,
                     onFilterSelected = vm::onFilterSelected,
-                    onAddClick = { navController.navigate("add_product") }
+                    onAddClick = { navController.navigate(Routes.ADD_PRODUCT) },
+                    onEditProduct = { id -> navController.navigate("${Routes.ADD_PRODUCT}/$id") },
+                    onDeactivateProduct = vm::toggleActive,
+                    onRetry = vm::retry,
+                    onStartEditingBusiness = vm::startEditingBusiness,
+                    onCancelEditingBusiness = vm::cancelEditingBusiness,
+                    onSaveBusiness = vm::saveBusiness,
+                    onBusinessNameChange = vm::onBusinessNameChange,
+                    onBusinessRubroChange = vm::onBusinessRubroChange,
+                    onBusinessRegionChange = vm::onBusinessRegionChange,
+                    onBusinessComunaChange = vm::onBusinessComunaChange
                 )
             }
 
-            composable("add_product") {
+            composable(Routes.ADD_PRODUCT) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AddProductViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(state.isSuccess) {
+                    if (state.isSuccess) navController.popBackStack()
+                }
 
                 AddProductScreen(
                     state = state,
-                    vm = vm,
+                    onIsProductChange = vm::onIsProductChange,
+                    onNombreChange = vm::onNombreChange,
+                    onCategoriaChange = vm::onCategoriaChange,
+                    onPrecioChange = vm::onPrecioChange,
+                    onCostoChange = vm::onCostoChange,
+                    onDescripcionChange = vm::onDescripcionChange,
+                    onStockActualChange = vm::onStockActualChange,
+                    onStockMinimoChange = vm::onStockMinimoChange,
+                    onUnidadChange = vm::onUnidadChange,
+                    onIsActiveChange = vm::onIsActiveChange,
+                    onSave = vm::saveProduct,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Routes.EDIT_PRODUCT) { entry ->
+                if (!session.canAccessDashboard) return@composable
+                val productId = entry.arguments?.getString("productId")
+                val vm: AddProductViewModel = viewModel(factory = ProductViewModelFactory(authRepository, AppContainer.catalogRepository, productId))
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(state.isSuccess) { if (state.isSuccess) navController.popBackStack() }
+                AddProductScreen(
+                    state = state,
+                    onIsProductChange = vm::onIsProductChange,
+                    onNombreChange = vm::onNombreChange,
+                    onCategoriaChange = vm::onCategoriaChange,
+                    onPrecioChange = vm::onPrecioChange,
+                    onCostoChange = vm::onCostoChange,
+                    onDescripcionChange = vm::onDescripcionChange,
+                    onStockActualChange = vm::onStockActualChange,
+                    onStockMinimoChange = vm::onStockMinimoChange,
+                    onUnidadChange = vm::onUnidadChange,
+                    onIsActiveChange = vm::onIsActiveChange,
+                    onSave = vm::saveProduct,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -301,63 +374,10 @@ fun AppNavigation() {
     }
 }
 
-private class AppViewModelFactory(
-    private val authRepository: AuthRepository,
-    private val businessRepository: BusinessRepository
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T = when {
-        modelClass.isAssignableFrom(SessionViewModel::class.java) -> SessionViewModel(authRepository, businessRepository)
-        modelClass.isAssignableFrom(LoginViewModel::class.java) -> LoginViewModel(authRepository)
-        modelClass.isAssignableFrom(RegisterViewModel::class.java) -> RegisterViewModel(authRepository)
-        modelClass.isAssignableFrom(ForgotPasswordViewModel::class.java) -> ForgotPasswordViewModel(authRepository)
-        modelClass.isAssignableFrom(VerifyEmailViewModel::class.java) -> VerifyEmailViewModel(authRepository)
-        modelClass.isAssignableFrom(AccountViewModel::class.java) -> AccountViewModel(authRepository)
-        modelClass.isAssignableFrom(DashboardViewModel::class.java) -> DashboardViewModel(authRepository, businessRepository)
-        modelClass.isAssignableFrom(MovementsViewModel::class.java) -> MovementsViewModel()
-        modelClass.isAssignableFrom(BusinessViewModel::class.java) -> BusinessViewModel()
-        modelClass.isAssignableFrom(AddProductViewModel::class.java) -> AddProductViewModel()
-        modelClass.isAssignableFrom(AiViewModel::class.java) -> AiViewModel()
-        modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository)
-        modelClass.isAssignableFrom(OnboardingViewModel::class.java) -> OnboardingViewModel(businessRepository)
-        else -> throw IllegalArgumentException("ViewModel desconocido: ${modelClass.name}")
-    } as T
-}
-
 private fun NavHostController.navigateAndClear(route: String) {
     navigate(route) {
         popUpTo(graph.id) { inclusive = true }
         launchSingleTop = true
-    }
-}
-
-private data class BottomDestination(
-    val route: String,
-    val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector
-)
-
-private val bottomDestinations = listOf(
-    BottomDestination(Routes.DASHBOARD, "Inicio", Icons.Default.Home),
-    BottomDestination(Routes.MOVEMENTS, "Movimientos", Icons.Default.ReceiptLong),
-    BottomDestination(Routes.BUSINESS, "Negocio", Icons.Default.Business),
-    BottomDestination(Routes.AI, "IA", Icons.Default.AutoAwesome),
-    BottomDestination(Routes.PROFILE, "Perfil", Icons.Default.AccountCircle)
-)
-
-private val bottomRoutes = bottomDestinations.mapTo(mutableSetOf()) { it.route }
-
-@Composable
-private fun AppBottomNavigation(currentRoute: String?, onNavigate: (String) -> Unit) {
-    NavigationBar {
-        bottomDestinations.forEach { destination ->
-            NavigationBarItem(
-                selected = currentRoute == destination.route,
-                onClick = { onNavigate(destination.route) },
-                icon = { Icon(destination.icon, contentDescription = destination.label) },
-                label = { Text(destination.label) }
-            )
-        }
     }
 }
 

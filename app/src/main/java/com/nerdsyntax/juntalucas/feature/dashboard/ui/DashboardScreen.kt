@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 import java.util.Locale
+import android.app.DatePickerDialog
+import androidx.compose.ui.platform.LocalContext
+import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
 
 
 private val DarkBlue = Color(0xFF0F2A4A)
@@ -33,7 +36,12 @@ private val PurpleAi = Color(0xFF8B5CF6)
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
-    onNavigateToAi: () -> Unit
+    onNavigateToAi: () -> Unit,
+    onFilterSelected: (DashboardPeriodFilter) -> Unit = {},
+    onCustomStart: (String) -> Unit = {},
+    onCustomEnd: (String) -> Unit = {},
+    onRetry: () -> Unit = {},
+    onViewAll: () -> Unit = {}
 ) {
     if (state.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -48,7 +56,7 @@ fun DashboardScreen(
             .background(LightBg)
             .verticalScroll(rememberScrollState())
     ) {
-        HeaderSection(state)
+        HeaderSection(state, onFilterSelected, onCustomStart, onCustomEnd)
 
         Column(
             modifier = Modifier
@@ -56,20 +64,21 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = onRetry) { Text("Reintentar") } }
             GoalSection(state)
             KpiGridSection(state)
 
             AiBannerSection(onClick = onNavigateToAi)
 
-            RecentMovementsSection(state.movimientosRecientes)
+            RecentMovementsSection(state.movimientosRecientes, onViewAll)
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
-private fun HeaderSection(state: DashboardUiState) {
+private fun HeaderSection(state: DashboardUiState, onFilterSelected: (DashboardPeriodFilter) -> Unit, onCustomStart: (String) -> Unit, onCustomEnd: (String) -> Unit) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -105,11 +114,18 @@ private fun HeaderSection(state: DashboardUiState) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Text("Semana", color = Color.Gray, fontSize = 14.sp)
-            Box(modifier = Modifier.background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text("Mes actual", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            DashboardPeriodFilter.entries.forEach { period ->
+                val selected = state.selectedFilter == period
+                Box(modifier = Modifier.clickable { onFilterSelected(period) }.background(if (selected) Color.White.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Text(period.label, color = if (selected) Color.White else Color.Gray, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
+                }
             }
-            Text("Personalizado", color = Color.Gray, fontSize = 14.sp)
+        }
+        if (state.selectedFilter == DashboardPeriodFilter.CUSTOM) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { pickDate(context, state.customStart, onCustomStart) }, modifier = Modifier.weight(1f)) { Text(state.customStart.ifBlank { "Desde" }) }
+                OutlinedButton(onClick = { pickDate(context, state.customEnd, onCustomEnd) }, modifier = Modifier.weight(1f)) { Text(state.customEnd.ifBlank { "Hasta" }) }
+            }
         }
     }
 }
@@ -117,7 +133,7 @@ private fun HeaderSection(state: DashboardUiState) {
 @Composable
 private fun GoalSection(state: DashboardUiState) {
     val progress = if (state.metaMensual > 0) {
-        (state.ventasTotales.toDouble() / state.metaMensual).coerceIn(0.0, 1.0).toFloat()
+        (state.ventasMesActual.toDouble() / state.metaMensual).coerceIn(0.0, 1.0).toFloat()
     } else 0f
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -127,7 +143,7 @@ private fun GoalSection(state: DashboardUiState) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Meta mensual de ventas", color = Color.Gray, fontSize = 14.sp)
-                Text("${(progress * 100).toInt()}%", color = DarkBlue, fontWeight = FontWeight.Bold)
+                Text(if (state.metaMensual > 0) "${(progress * 100).toInt()}%" else "Sin meta", color = DarkBlue, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
@@ -138,8 +154,8 @@ private fun GoalSection(state: DashboardUiState) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${formatPesos(state.ventasTotales)} alcanzados", color = Color.Gray, fontSize = 12.sp)
-                Text("Meta: ${if (state.errorMessage == null) formatPesos(state.metaMensual) else "—"}", color = Color.LightGray, fontSize = 12.sp)
+                Text("${formatPesos(state.ventasMesActual)} alcanzados", color = Color.Gray, fontSize = 12.sp)
+                Text(if (state.metaMensual > 0) "Meta: ${formatPesos(state.metaMensual)}" else "Configúrala en Negocio", color = Color.LightGray, fontSize = 12.sp)
             }
         }
     }
@@ -165,7 +181,7 @@ private fun KpiGridSection(state: DashboardUiState) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         KpiCard(
-            modifier = Modifier.weight(1f), title = "Ganancia", amount = formatPesos(state.ganancia),
+            modifier = Modifier.weight(1f), title = "Balance de movimientos", amount = formatPesos(state.balanceMovimientos),
             iconColor = RedNeg, icon = Icons.Default.QueryBuilder, amountColor = OrangeWarn
         )
         KpiCard(
@@ -224,7 +240,7 @@ private fun AiBannerSection(onClick: () -> Unit) {
 }
 
 @Composable
-private fun RecentMovementsSection(movimientos: List<MovimientoUi>) {
+private fun RecentMovementsSection(movimientos: List<MovimientoUi>, onViewAll: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -233,7 +249,7 @@ private fun RecentMovementsSection(movimientos: List<MovimientoUi>) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Movimientos recientes", fontWeight = FontWeight.Bold, color = DarkBlue, fontSize = 16.sp)
-                Text("Ver todos", color = DarkBlue, fontSize = 12.sp)
+                Text("Ver todos", color = DarkBlue, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onViewAll))
             }
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -265,3 +281,12 @@ private fun RecentMovementsSection(movimientos: List<MovimientoUi>) {
 }
 
 private fun formatPesos(amount: Long): String = "$" + NumberFormat.getIntegerInstance(Locale.forLanguageTag("es-CL")).format(amount)
+
+private fun pickDate(context: android.content.Context, current: String, onSelected: (String) -> Unit) {
+    val valid = current.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}"))
+    val parts = if (valid) current.split("-").map(String::toInt) else null
+    val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("America/Santiago"))
+    DatePickerDialog(context, { _, year, month, day -> onSelected(String.format(Locale.ROOT, "%04d-%02d-%02d", year, month + 1, day)) },
+        parts?.get(0) ?: calendar.get(java.util.Calendar.YEAR), (parts?.get(1) ?: calendar.get(java.util.Calendar.MONTH) + 1) - 1,
+        parts?.get(2) ?: calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
+}

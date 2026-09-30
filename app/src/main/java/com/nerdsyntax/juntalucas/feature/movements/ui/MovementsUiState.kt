@@ -4,9 +4,12 @@ data class MovementsUiState(
     val searchQuery: String = "",
     val selectedFilter: String = "Todos",
     val movements: List<MovementItem> = emptyList(),
-    val totalVendido: String = "$1.800.000",
-    val ticketPromedio: String = "$58.400",
-    val totalGastos: String = "$1.570.000",
+    val totalVendido: String = "$0",
+    val ticketPromedio: String = "$0",
+    val month: String = com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates.today().take(7),
+    val errorMessage: String? = null,
+    val fromCache: Boolean = false,
+    val totalGastos: String = "$0",
     val isLoading: Boolean = false
 )
 enum class MovementTab { VENTAS, GASTOS }

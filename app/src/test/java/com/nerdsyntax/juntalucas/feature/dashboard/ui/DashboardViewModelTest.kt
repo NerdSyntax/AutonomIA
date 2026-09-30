@@ -1,13 +1,12 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import com.nerdsyntax.juntalucas.feature.auth.domain.model.AuthUser
-import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
+import com.nerdsyntax.juntalucas.support.FakeAuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.Business
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -27,25 +26,13 @@ class DashboardViewModelTest {
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { Dispatchers.resetMain() }
 
-    private class Auth(user: AuthUser?) : AuthRepository {
-        override val currentUser = MutableStateFlow(user)
-        override suspend fun loginWithGoogle(idToken: String): Result<AuthUser> = error("Unused")
-        override suspend fun login(email: String, password: String): Result<AuthUser> = error("Unused")
-        override suspend fun register(email: String, password: String): Result<AuthUser> = error("Unused")
-        override suspend fun sendPasswordReset(email: String): Result<Unit> = error("Unused")
-        override suspend fun sendEmailVerification(): Result<Unit> = error("Unused")
-        override suspend fun reloadCurrentUser(): Result<AuthUser?> = error("Unused")
-        override suspend fun deleteCurrentUser(): Result<Unit> = error("Unused")
-        override fun logout() { currentUser.value = null }
-    }
-
     private class Repository(val read: suspend () -> Result<Business?>) : BusinessRepository {
         override suspend fun getBusiness() = read()
         override suspend fun saveBusiness(business: Business): Result<Unit> = error("Unused")
     }
 
     @Test fun loadsBusinessAndEmailWithEmptyFinancialData() = runTest(dispatcher) {
-        val vm = DashboardViewModel(Auth(userA), Repository {
+        val vm = DashboardViewModel(FakeAuthRepository(userA), Repository {
             Result.success(Business(nombreNegocio = "Negocio A", metaMensual = 500000L))
         })
         advanceUntilIdle()
@@ -63,7 +50,7 @@ class DashboardViewModelTest {
     }
 
     @Test fun accountChangeCancelsOldReadAndLogoutClearsBusiness() = runTest(dispatcher) {
-        val auth = Auth(userA)
+        val auth = FakeAuthRepository(userA)
         val pendingA = CompletableDeferred<Result<Business?>>()
         val pendingB = CompletableDeferred<Result<Business?>>()
         val vm = DashboardViewModel(auth, Repository {
@@ -89,7 +76,7 @@ class DashboardViewModelTest {
     }
 
     @Test fun missingBusinessAndReadErrorNeverUseExampleData() = runTest(dispatcher) {
-        val auth = Auth(userA)
+        val auth = FakeAuthRepository(userA)
         val vm = DashboardViewModel(auth, Repository {
             if (auth.currentUser.value?.uid == "a") Result.success(null)
             else Result.failure(IllegalStateException("technical details"))

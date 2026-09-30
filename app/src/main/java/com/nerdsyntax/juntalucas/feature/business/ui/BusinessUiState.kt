@@ -9,7 +9,8 @@ data class ProductItem(
     val price: String,
     val cost: String,
     val margin: String,
-    val stock: String
+    val stock: String,
+    val active: Boolean = true
 )
 
 data class BusinessUiState(
@@ -17,22 +18,26 @@ data class BusinessUiState(
     val searchQuery: String = "",
     val selectedFilter: String = "Todos",
     val products: List<ProductItem> = emptyList(),
+    val isLoading: Boolean = true,
+    val errorMessage: String? = null,
+    val isEditingBusiness: Boolean = false,
+    val isSavingBusiness: Boolean = false,
 
     //Datos genericos para que veas donde va cada cosa
-    val businessName: String = "Nombre de negocio",
-    val businessDetails: String = "Rubro de ejemplo · Región, Comuna",
-    val productCount: String = "4",
-    val serviceCount: String = "2",
-    val assetCount: String = "5",
+    val businessName: String = "",
+    val businessDetails: String = "",
+    val productCount: String = "0",
+    val serviceCount: String = "0",
+    val assetCount: String = "0",
 
-    val goalTotal: String = "$2.000.000",
-    val goalProgressText: String = "$1.800.000 alcanzados este mes (90%)",
-    val goalPercentage: Float = 0.9f,
+    val goalTotal: String = "$0",
+    val goalProgressText: String = "$0 alcanzados este mes (0%)",
+    val goalPercentage: Float = 0f,
 
-    val rubro: String = "Rubro de ejemplo",
-    val actividad: String = "Productos y servicios",
-    val region: String = "Región de ejemplo",
-    val comuna: String = "Comuna de ejemplo",
+    val rubro: String = "",
+    val actividad: String = "",
+    val region: String = "",
+    val comuna: String = "",
     val moneda: String = "Peso chileno (CLP)",
-    val registro: String = "Septiembre 2026"
+    val registro: String = ""
 )

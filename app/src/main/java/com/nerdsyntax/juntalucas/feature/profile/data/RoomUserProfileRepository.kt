@@ -5,7 +5,7 @@ import com.nerdsyntax.juntalucas.feature.profile.domain.UserProfileRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class UserProfileRepositoryImpl(
+class RoomUserProfileRepository(
     private val userProfileDao: UserProfileDao
 ) : UserProfileRepository {
 

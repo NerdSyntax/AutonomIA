@@ -2,16 +2,14 @@ package com.nerdsyntax.juntalucas.feature.auth.ui.login
 
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.nerdsyntax.juntalucas.feature.auth.domain.model.AuthUser
-import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
+import com.nerdsyntax.juntalucas.support.FakeAuthRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
 class LoginViewModelTest {
-    private class Auth : AuthRepository {
-        override val currentUser = MutableStateFlow<AuthUser?>(null)
+    private class Auth : FakeAuthRepository() {
         var receivedToken: String? = null
         val googleUser = AuthUser("google-uid", "user@gmail.com", true, "Nombre", "https://example.com/photo")
         override suspend fun loginWithGoogle(idToken: String): Result<AuthUser> {
@@ -19,13 +17,7 @@ class LoginViewModelTest {
             currentUser.value = googleUser
             return Result.success(googleUser)
         }
-        override suspend fun login(email: String, password: String): Result<AuthUser> = error("Unused")
-        override suspend fun register(email: String, password: String): Result<AuthUser> = error("Unused")
-        override suspend fun sendPasswordReset(email: String): Result<Unit> = error("Unused")
-        override suspend fun sendEmailVerification(): Result<Unit> = error("Unused")
-        override suspend fun reloadCurrentUser(): Result<AuthUser?> = error("Unused")
-        override suspend fun deleteCurrentUser(): Result<Unit> = error("Unused")
-        override fun logout() { currentUser.value = null }
+
     }
 
     @Test fun googleDoesNotRequireEmailOrPasswordAndPublishesFirebaseUser() = runTest {

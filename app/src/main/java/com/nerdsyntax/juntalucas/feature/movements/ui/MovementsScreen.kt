@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nerdsyntax.juntalucas.feature.movements.domain.PaymentMethod
+import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
@@ -32,7 +34,9 @@ fun MovementsScreen(
     onTabSelected: (MovementTab) -> Unit = {},
     onSearchChange: (String) -> Unit = {},
     onFilterSelected: (String) -> Unit = {},
-    onAddClick: (Boolean) -> Unit = {}
+    onAddClick: (Boolean) -> Unit = {},
+    onRetry: () -> Unit = {},
+    onChangeMonth: (Int) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -57,7 +61,7 @@ fun MovementsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Pestaña de ventas y gastos
+                // PestaÃ±a de ventas y gastos
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceAround
@@ -82,7 +86,7 @@ fun MovementsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (state.selectedTab == MovementTab.VENTAS) "Total vendido en septiembre" else "Total gastado en septiembre",
+                            text = if (state.selectedTab == MovementTab.VENTAS) "Total vendido en ${SaleDates.monthLabel(state.month)}" else "Total gastado en ${SaleDates.monthLabel(state.month)}",
                             color = Color.LightGray,
                             fontSize = 12.sp
                         )
@@ -95,13 +99,20 @@ fun MovementsScreen(
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("Ticket promedio", color = Color.LightGray, fontSize = 12.sp)
+                        Text(if (state.selectedTab == MovementTab.VENTAS) "Ticket promedio" else "Gasto promedio", color = Color.LightGray, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(state.ticketPromedio, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { onChangeMonth(-1) }) { Icon(Icons.Default.ChevronLeft, "Mes anterior", tint = Color.White) }
+                        Text(SaleDates.monthLabel(state.month), color = Color.White)
+                        IconButton(onClick = { onChangeMonth(1) }) { Icon(Icons.Default.ChevronRight, "Mes siguiente", tint = Color.White) }
+                    }
+                    Text(if (state.selectedTab == MovementTab.VENTAS) "Resumen de las ventas visibles del mes; incluye búsqueda y filtros." else "Resumen de los gastos visibles del mes; incluye búsqueda y filtros.", color = Color.LightGray, fontSize = 12.sp)
 
                 Box(
                     modifier = Modifier
@@ -142,7 +153,7 @@ fun MovementsScreen(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val filters = listOf("Todos", "Efectivo", "Débito", "Crédito", "Transferencia")
+                    val filters = listOf("Todos") + PaymentMethod.entries.map { it.label }
                     filters.forEach { filter ->
                         FilterChip(
                             selected = state.selectedFilter == filter,
@@ -171,6 +182,29 @@ fun MovementsScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        if (state.selectedTab == MovementTab.VENTAS) {
+                            when {
+                                state.isLoading -> { CircularProgressIndicator(); Text("Cargando ventas...") }
+                                state.errorMessage != null -> {
+                                    Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
+                                    TextButton(onClick = onRetry) { Text("Reintentar") }
+                                }
+                                state.movements.isEmpty() -> Text(
+                                    if (state.searchQuery.isNotBlank() || state.selectedFilter != "Todos") "No hay ventas que coincidan con la bÃºsqueda y el filtro."
+                                    else "No tienes ventas registradas en este mes.", color = Color.Gray)
+                            }
+                            if (state.fromCache && state.errorMessage == null) {
+                                Text("Datos guardados en el dispositivo. Pendientes de confirmar con Firebase.", color = Color.Gray)
+                                TextButton(onClick = onRetry) { Text("Actualizar") }
+                            }
+                        } else {
+                            when {
+                                state.isLoading -> { CircularProgressIndicator(); Text("Cargando gastos...") }
+                                state.errorMessage != null -> { Text(state.errorMessage, color = MaterialTheme.colorScheme.error); TextButton(onClick = onRetry) { Text("Reintentar") } }
+                                state.movements.isEmpty() -> Text(if (state.searchQuery.isNotBlank() || state.selectedFilter != "Todos") "No hay gastos que coincidan con la bÃºsqueda y el filtro." else "No tienes gastos registrados en este mes.", color = Color.Gray)
+                            }
+                            if (state.fromCache && state.errorMessage == null) { Text("Datos guardados en el dispositivo. Pendientes de confirmar con Firebase.", color = Color.Gray); TextButton(onClick = onRetry) { Text("Actualizar") } }
+                        }
                         state.movements.forEach { mov ->
                             Row(
                                 modifier = Modifier
@@ -198,7 +232,7 @@ fun MovementsScreen(
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(mov.title, fontWeight = FontWeight.SemiBold, color = DarkBlue, fontSize = 14.sp)
-                                    Text("${mov.date} · ${mov.paymentMethod}", color = Color.Gray, fontSize = 12.sp)
+                                    Text("${mov.date} Â· ${mov.paymentMethod}", color = Color.Gray, fontSize = 12.sp)
                                 }
 
                                 Text(mov.amount, fontWeight = FontWeight.Bold, color = iconColor, fontSize = 15.sp)

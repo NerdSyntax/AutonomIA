@@ -1,4 +1,4 @@
-package com.nerdsyntax.juntalucas.feature.business.ui
+package com.nerdsyntax.juntalucas.feature.business.ui.product
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -28,7 +28,17 @@ import java.text.DecimalFormatSymbols
 @Composable
 fun AddProductScreen(
     state: AddProductUiState,
-    vm: AddProductViewModel,
+    onIsProductChange: (Boolean) -> Unit,
+    onNombreChange: (String) -> Unit,
+    onCategoriaChange: (String) -> Unit,
+    onPrecioChange: (String) -> Unit,
+    onCostoChange: (String) -> Unit,
+    onDescripcionChange: (String) -> Unit,
+    onStockActualChange: (String) -> Unit,
+    onStockMinimoChange: (String) -> Unit,
+    onUnidadChange: (String) -> Unit,
+    onIsActiveChange: (Boolean) -> Unit,
+    onSave: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val darkBlue = Color(0xFF0F2A4A)
@@ -81,18 +91,18 @@ fun AddProductScreen(
                     modifier = Modifier.padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TypeButton("Producto", Icons.Default.Inventory, state.isProduct, { vm.onIsProductChange(true) }, Modifier.weight(1f))
-                    TypeButton("Servicio", Icons.Default.Settings, !state.isProduct, { vm.onIsProductChange(false) }, Modifier.weight(1f))
+                    TypeButton("Producto", Icons.Default.Inventory, state.isProduct, { onIsProductChange(true) }, Modifier.weight(1f))
+                    TypeButton("Servicio", Icons.Default.Settings, !state.isProduct, { onIsProductChange(false) }, Modifier.weight(1f))
                 }
             }
 
-            CustomProductField("Nombre *", state.nombre, "Ej: Cupcakes (docena)", onValueChange = vm::onNombreChange)
-            CustomProductField("Categoría", state.categoria, onValueChange = vm::onCategoriaChange, trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.Gray) })
-            CustomProductField("Precio de venta *", state.precio, "Ej: 21.000", isNumber = true, onValueChange = vm::onPrecioChange)
-            CustomProductField("Costo estimado", state.costo, "Ej: 12.000", isNumber = true, onValueChange = vm::onCostoChange)
+            CustomProductField("Nombre *", state.nombre, "Ej: Cupcakes (docena)", onValueChange = onNombreChange)
+            CustomProductField("Categoría", state.categoria, onValueChange = onCategoriaChange, trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.Gray) })
+            CustomProductField("Precio de venta *", state.precio, "Ej: 21.000", isNumber = true, onValueChange = onPrecioChange)
+            CustomProductField("Costo estimado", state.costo, "Ej: 12.000", isNumber = true, onValueChange = onCostoChange)
 
             OutlinedTextField(
-                value = state.descripcion, onValueChange = vm::onDescripcionChange,
+                value = state.descripcion, onValueChange = onDescripcionChange,
                 label = { Text("Descripción (opcional)", color = Color.Gray) },
                 placeholder = { Text("Características del producto...", color = Color.LightGray) },
                 modifier = Modifier.fillMaxWidth(),
@@ -108,9 +118,9 @@ fun AddProductScreen(
 
             if (state.isProduct) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CustomProductField("Stock actual", state.stockActual, isNumber = true, onValueChange = vm::onStockActualChange, modifier = Modifier.weight(1f))
-                    CustomProductField("Stock mínimo", state.stockMinimo, isNumber = true, onValueChange = vm::onStockMinimoChange, modifier = Modifier.weight(1f))
-                    CustomProductField("Unidad", state.unidad, onValueChange = vm::onUnidadChange, modifier = Modifier.weight(1f), trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.Gray) })
+                    CustomProductField("Stock actual", state.stockActual, isNumber = true, onValueChange = onStockActualChange, modifier = Modifier.weight(1f))
+                    CustomProductField("Stock mínimo", state.stockMinimo, isNumber = true, onValueChange = onStockMinimoChange, modifier = Modifier.weight(1f))
+                    CustomProductField("Unidad", state.unidad, onValueChange = onUnidadChange, modifier = Modifier.weight(1f), trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.Gray) })
                 }
             }
 
@@ -138,6 +148,9 @@ fun AddProductScreen(
                 }
             }
 
+            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (state.isSaving) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+
             Card(
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
@@ -154,7 +167,7 @@ fun AddProductScreen(
                     }
                     Switch(
                         checked = state.isActive,
-                        onCheckedChange = vm::onIsActiveChange,
+                        onCheckedChange = onIsActiveChange,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = darkBlue,
@@ -168,11 +181,12 @@ fun AddProductScreen(
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
-                    onClick = onNavigateBack, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(12.dp),
+                    onClick = onNavigateBack, enabled = !state.isSaving, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, Color(0xFFE2E8F0)), colors = ButtonDefaults.outlinedButtonColors(contentColor = darkBlue)
                 ) { Text("Cancelar", fontWeight = FontWeight.Bold) }
                 Button(
-                    onClick = { vm.saveProduct(onSuccess = onNavigateBack) },
+                    onClick = onSave,
+                    enabled = !state.isSaving,
                     modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = darkBlue)
                 ) { Text("Guardar", fontWeight = FontWeight.Bold) }

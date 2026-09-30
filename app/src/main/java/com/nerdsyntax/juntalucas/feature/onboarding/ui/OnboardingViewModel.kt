@@ -9,19 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
-
-//base de datos con datos simulados locales para pruebas
-object MockAppDatabase {
-    var movements: List<DummyMovement> = emptyList()
-}
-
-data class DummyMovement(
-    val id: String = UUID.randomUUID().toString(),
-    val description: String,
-    val amount: Int,
-    val type: String // "ingreso" o "gasto"
-)
+import com.nerdsyntax.juntalucas.feature.onboarding.data.OnboardingSampleData
 
 class OnboardingViewModel(private val businessRepository: BusinessRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(OnboardingUiState())
@@ -81,23 +69,7 @@ class OnboardingViewModel(private val businessRepository: BusinessRepository) : 
                 return@launch
             }
 
-            when (currentState.puntoPartida) {
-                "manual" -> {
-                    MockAppDatabase.movements = emptyList()
-                }
-                "ejemplo" -> {
-                    MockAppDatabase.movements = listOf(
-                        DummyMovement(description = "Venta pastel de chocolate", amount = 15000, type = "ingreso"),
-                        DummyMovement(description = "Compra de harina y huevos", amount = 4500, type = "gasto"),
-                        DummyMovement(description = "Venta 12 cupcakes surtidos", amount = 18000, type = "ingreso"),
-                        DummyMovement(description = "Pago de electricidad", amount = 22000, type = "gasto"),
-                        DummyMovement(description = "Venta torta de novios", amount = 65000, type = "ingreso")
-                    )
-                }
-                "importar" -> {
-                    MockAppDatabase.movements = emptyList()
-                }
-            }
+            OnboardingSampleData.initialize(currentState.puntoPartida)
 
             _uiState.update { it.copy(isLoading = false, isSuccess = true) }
 

@@ -32,7 +32,17 @@ fun BusinessScreen(
     onTabSelected: (BusinessTab) -> Unit = {},
     onSearchChange: (String) -> Unit = {},
     onFilterSelected: (String) -> Unit = {},
-    onAddClick: () -> Unit = {}
+    onAddClick: () -> Unit = {},
+    onEditProduct: (String) -> Unit = {},
+    onDeactivateProduct: (String) -> Unit = {},
+    onRetry: () -> Unit = {},
+    onStartEditingBusiness: () -> Unit = {},
+    onCancelEditingBusiness: () -> Unit = {},
+    onSaveBusiness: () -> Unit = {},
+    onBusinessNameChange: (String) -> Unit = {},
+    onBusinessRubroChange: (String) -> Unit = {},
+    onBusinessRegionChange: (String) -> Unit = {},
+    onBusinessComunaChange: (String) -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize().background(LightBg)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -70,9 +80,10 @@ fun BusinessScreen(
                     .padding(horizontal = 24.dp, vertical = 20.dp)
             ) {
                 if (state.selectedTab == BusinessTab.PRODUCTOS) {
-                    ProductsTabContent(state, onSearchChange, onFilterSelected)
+                    ProductsTabContent(state, onSearchChange, onFilterSelected, onEditProduct, onDeactivateProduct, onRetry)
                 } else {
-                    InfoTabContent(state)
+                    InfoTabContent(state, onStartEditingBusiness, onCancelEditingBusiness, onSaveBusiness,
+                        onBusinessNameChange, onBusinessRubroChange, onBusinessRegionChange, onBusinessComunaChange)
                 }
                 Spacer(modifier = Modifier.height(80.dp))
             }
@@ -104,7 +115,10 @@ fun BusinessScreen(
 private fun ProductsTabContent(
     state: BusinessUiState,
     onSearchChange: (String) -> Unit,
-    onFilterSelected: (String) -> Unit
+    onFilterSelected: (String) -> Unit,
+    onEditProduct: (String) -> Unit,
+    onDeactivateProduct: (String) -> Unit,
+    onRetry: () -> Unit
 ) {
     Column {
         OutlinedTextField(
@@ -158,6 +172,15 @@ private fun ProductsTabContent(
         }
         Spacer(modifier = Modifier.height(20.dp))
 
+        if (state.isLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        state.errorMessage?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = onRetry) { Text("Reintentar") }
+        }
+        if (!state.isLoading && state.errorMessage == null && state.products.isEmpty()) {
+            Text("No hay productos o servicios en tu catálogo.", color = Color.Gray)
+        }
+
         state.products.forEach { product ->
             Card(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -168,7 +191,10 @@ private fun ProductsTabContent(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(product.name, fontWeight = FontWeight.Bold, color = DarkBlue, fontSize = 16.sp)
-                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones", tint = Color.Gray)
+                        Row {
+                            TextButton(onClick = { onEditProduct(product.id) }) { Text("Editar") }
+                            TextButton(onClick = { onDeactivateProduct(product.id) }) { Text(if (product.active) "Desactivar" else "Activar") }
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -191,7 +217,16 @@ private fun ProductsTabContent(
 }
 
 @Composable
-private fun InfoTabContent(state: BusinessUiState) {
+private fun InfoTabContent(
+    state: BusinessUiState,
+    onStartEditing: () -> Unit,
+    onCancelEditing: () -> Unit,
+    onSave: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onRubroChange: (String) -> Unit,
+    onRegionChange: (String) -> Unit,
+    onComunaChange: (String) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
         Card(
@@ -246,17 +281,29 @@ private fun InfoTabContent(state: BusinessUiState) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Información del negocio", color = DarkBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
-                InfoDetailRow("Rubro", state.rubro)
-                InfoDetailRow("Actividad", state.actividad)
-                InfoDetailRow("Región", state.region)
-                InfoDetailRow("Comuna", state.comuna)
+                if (state.isEditingBusiness) {
+                    OutlinedTextField(state.businessName, onNameChange, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(state.rubro, onRubroChange, label = { Text("Rubro") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(state.region, onRegionChange, label = { Text("Región") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(state.comuna, onComunaChange, label = { Text("Comuna") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                } else {
+                    InfoDetailRow("Rubro", state.rubro.ifBlank { "—" })
+                    InfoDetailRow("Actividad", state.actividad.ifBlank { "—" })
+                    InfoDetailRow("Región", state.region.ifBlank { "—" })
+                    InfoDetailRow("Comuna", state.comuna.ifBlank { "—" })
+                }
                 InfoDetailRow("Moneda", state.moneda)
                 InfoDetailRow("Registrado desde", state.registro)
             }
         }
 
-        OutlinedButton(
-            onClick = { /* Acción editar */ },
+        if (state.isEditingBusiness) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onCancelEditing, enabled = !state.isSavingBusiness, modifier = Modifier.weight(1f).height(54.dp)) { Text("Cancelar") }
+                Button(onClick = onSave, enabled = !state.isSavingBusiness, modifier = Modifier.weight(1f).height(54.dp)) { Text(if (state.isSavingBusiness) "Guardando..." else "Guardar") }
+            }
+        } else OutlinedButton(
+            onClick = onStartEditing,
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(1.dp, DarkBlue),

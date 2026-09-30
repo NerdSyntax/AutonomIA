@@ -4,5 +4,71 @@ service cloud.firestore {
     match /users/{uid}/business/profile {
       allow read, create, update: if request.auth != null && request.auth.uid == uid;
     }
+
+    match /users/{uid}/products/{productId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.userId == uid
+        && request.resource.data.id == productId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && (request.resource.data.unitCost is int || request.resource.data.unitCost == null);
+      allow update: if request.auth != null && request.auth.uid == uid
+        && resource.data.userId == uid
+        && request.resource.data.userId == uid
+        && request.resource.data.id == productId;
+      allow delete: if false;
+    }
+
+    match /users/{uid}/sales/{saleId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.userId == uid
+        && request.resource.data.id == saleId
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.saleDate is string
+        && request.resource.data.productId is string
+        && request.resource.data.productName is string
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity > 0
+        && request.resource.data.unitPrice is int
+        && request.resource.data.unitPrice > 0
+        && request.resource.data.discount is int
+        && request.resource.data.discount >= 0
+        && request.resource.data.discount <= request.resource.data.quantity * request.resource.data.unitPrice
+        && request.resource.data.total == request.resource.data.quantity * request.resource.data.unitPrice - request.resource.data.discount
+        && request.resource.data.paymentMethod in ['CASH', 'DEBIT', 'CREDIT', 'TRANSFER']
+        && request.resource.data.note is string
+        && request.resource.data.stockTracked is bool
+        && get(/databases/$(database)/documents/users/$(uid)/products/$(request.resource.data.productId)).data.active == true
+        && getAfter(/databases/$(database)/documents/users/$(uid)/products/$(request.resource.data.productId)).data.userId == uid;
+      allow update, delete: if false;
+    }
+
+    match /users/{uid}/expenses/{expenseId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.userId == uid
+        && request.resource.data.id == expenseId
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.description.size() <= 200
+        && request.resource.data.category is string
+        && request.resource.data.category.size() > 0
+        && request.resource.data.category.size() <= 100
+        && request.resource.data.amount is int
+        && request.resource.data.amount > 0
+        && request.resource.data.expenseDate is string
+        && request.resource.data.type in ['FIXED', 'VARIABLE']
+        && request.resource.data.paymentMethod in ['CASH', 'DEBIT', 'CREDIT', 'TRANSFER']
+        && request.resource.data.note is string
+        && request.resource.data.createdAt is timestamp;
+
+      allow update, delete: if false;
+    }
   }
 }

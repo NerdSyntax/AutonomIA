@@ -3,6 +3,7 @@ package com.nerdsyntax.juntalucas.feature.onboarding.ui
 import com.nerdsyntax.juntalucas.feature.business.domain.Business
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessAuthenticationException
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
+import com.nerdsyntax.juntalucas.feature.onboarding.data.OnboardingSampleData
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,7 +24,7 @@ class OnboardingViewModelTest {
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() {
         Dispatchers.resetMain()
-        MockAppDatabase.movements = emptyList()
+        OnboardingSampleData.initialize("manual")
     }
 
     private class Repository : BusinessRepository {
@@ -59,7 +60,7 @@ class OnboardingViewModelTest {
         advanceUntilIdle()
         assertFalse(vm.uiState.value.isLoading)
         assertTrue(vm.uiState.value.isSuccess)
-        assertEquals(5, MockAppDatabase.movements.size)
+        assertEquals(5, OnboardingSampleData.movements.size)
         vm.finalizarConfiguracion()
         advanceUntilIdle()
         assertEquals(1, repository.saved.size)
@@ -76,7 +77,7 @@ class OnboardingViewModelTest {
         assertEquals("Mi negocio", vm.uiState.value.nombreNegocio)
         assertNotNull(vm.uiState.value.errorMessage)
         assertFalse(vm.uiState.value.errorMessage!!.contains("private technical detail"))
-        assertTrue(MockAppDatabase.movements.isEmpty())
+        assertTrue(OnboardingSampleData.movements.isEmpty())
         vm.finalizarConfiguracion()
         advanceUntilIdle()
         assertEquals(2, repository.saved.size)
