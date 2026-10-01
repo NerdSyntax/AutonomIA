@@ -359,7 +359,12 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: ProfileViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                ProfileScreen(state) { navController.navigate(Routes.ACCOUNT) }
+
+                ProfileScreen(
+                    state = state,
+                    vm = vm,
+                    onNavigateToAccount = { navController.navigate(Routes.ACCOUNT) }
+                )
             }
             composable(Routes.ACCOUNT) {
                 if (!session.canAccessDashboard) return@composable
