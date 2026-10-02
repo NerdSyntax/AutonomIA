@@ -47,7 +47,7 @@ class AppViewModelFactory(
         modelClass.isAssignableFrom(BusinessViewModel::class.java) -> BusinessViewModel(authRepository, businessRepository, catalogRepository, salesRepository)
         modelClass.isAssignableFrom(AddProductViewModel::class.java) -> AddProductViewModel(authRepository, catalogRepository)
         modelClass.isAssignableFrom(AiViewModel::class.java) -> AiViewModel()
-        modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository)
+        modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository, businessRepository)
         modelClass.isAssignableFrom(OnboardingViewModel::class.java) -> OnboardingViewModel(businessRepository)
         else -> throw IllegalArgumentException("ViewModel desconocido: ${modelClass.name}")
     } as T

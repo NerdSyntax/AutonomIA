@@ -3,7 +3,7 @@ package com.nerdsyntax.juntalucas.feature.dashboard.ui
 import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
 
 data class DashboardUiState(
-    val userEmail: String = "",
+    val userName: String = "",
     val nombreNegocio: String = "",
     val metaMensual: Long = 0,
     val ventasTotales: Long = 0,

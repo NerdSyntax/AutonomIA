@@ -94,7 +94,7 @@ private fun HeaderSection(state: DashboardUiState, onFilterSelected: (DashboardP
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Hola, ${state.userEmail}", color = Color.LightGray, fontSize = 14.sp)
+                Text("Hola, ${state.userName}", color = Color.LightGray, fontSize = 14.sp)
                 Text(state.nombreNegocio, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

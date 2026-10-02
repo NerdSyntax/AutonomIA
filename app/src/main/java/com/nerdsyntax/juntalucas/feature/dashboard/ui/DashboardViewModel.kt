@@ -40,7 +40,7 @@ class DashboardViewModel(
             authRepository.currentUser.map { it?.uid }.distinctUntilChanged().collectLatest { uid ->
                 business = null; sales = emptyList(); monthlySales = emptyList(); expenses = emptyList(); error = null; fromCache = false
                 loading = uid != null
-                _uiState.value = DashboardUiState(userEmail = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: authRepository.currentUser.value?.email.orEmpty(), isLoading = loading)
+                _uiState.value = DashboardUiState(userName = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: "Usuario", isLoading = loading)
                 if (uid == null) { _uiState.value = DashboardUiState(errorMessage = "Inicia sesión para ver tu negocio."); return@collectLatest }
                 loadBusiness(uid)
                 combine(filter, customStart, customEnd, retry) { selected, start, end, _ -> selected to (start to end) }
@@ -94,15 +94,30 @@ class DashboardViewModel(
         val expensesTotal = expenses.fold(0L) { total, item -> runCatching { Math.addExact(total, item.draft.amount) }.getOrElse { total } }
         val balance = salesTotal - expensesTotal
         val recent = (sales.map { MovementRow(it.draft.saleDate, it.createdAtMillis, it.draft.id, it.productName, "+${formatClp(it.draft.total)}", true) } +
-            expenses.map { MovementRow(it.draft.expenseDate, it.createdAtMillis, it.draft.id, it.draft.description, "-${formatClp(it.draft.amount)}", false) })
+                expenses.map { MovementRow(it.draft.expenseDate, it.createdAtMillis, it.draft.id, it.draft.description, "-${formatClp(it.draft.amount)}", false) })
             .sortedWith(compareByDescending<MovementRow> { it.date }.thenByDescending { it.createdAt }.thenBy { it.id }).take(5)
             .map { MovimientoUi(it.id, it.title, it.date, it.amount, it.income) }
         val monthlyGoal = business?.metaMensual ?: 0L
         val monthSales = monthlySales.sumOf { it.draft.total }
-        _uiState.value = _uiState.value.copy(userEmail = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: authRepository.currentUser.value?.email.orEmpty(), nombreNegocio = business?.nombreNegocio.orEmpty(), metaMensual = monthlyGoal,
-            ventasTotales = salesTotal, ventasMesActual = monthSales, gastosTotales = expensesTotal, ganancia = balance, balanceMovimientos = balance, margen = "—", movimientosRecientes = recent,
-            selectedFilter = selected, periodLabel = rangeLabel, customStart = customStart.value, customEnd = customEnd.value,
-            isLoading = loading, errorMessage = error, fromCache = fromCache)
+        _uiState.value = _uiState.value.copy(
+            userName = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: "Usuario",
+            nombreNegocio = business?.nombreNegocio.orEmpty(),
+            metaMensual = monthlyGoal,
+            ventasTotales = salesTotal,
+            ventasMesActual = monthSales,
+            gastosTotales = expensesTotal,
+            ganancia = balance,
+            balanceMovimientos = balance,
+            margen = "—",
+            movimientosRecientes = recent,
+            selectedFilter = selected,
+            periodLabel = rangeLabel,
+            customStart = customStart.value,
+            customEnd = customEnd.value,
+            isLoading = loading,
+            errorMessage = error,
+            fromCache = fromCache
+        )
     }
 
     private data class MovementRow(val date: String, val createdAt: Long, val id: String, val title: String, val amount: String, val income: Boolean)

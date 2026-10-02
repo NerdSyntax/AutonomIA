@@ -353,7 +353,12 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AiViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                AiScreen(state)
+
+                AiScreen(
+                    state = state,
+                    vm = vm,
+                    onNavigateToAddSale = { navController.navigate(Routes.ADD_SALE) }
+                )
             }
             composable(Routes.PROFILE) {
                 if (!session.canAccessDashboard) return@composable
