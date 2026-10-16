@@ -26,4 +26,7 @@ object Routes {
 
     // Otras pantallas
     const val ACCOUNT = "account"
+
+    const val AI_LOADING = "ai_loading"
+    const val AI_CHAT = "ai_chat"
 }

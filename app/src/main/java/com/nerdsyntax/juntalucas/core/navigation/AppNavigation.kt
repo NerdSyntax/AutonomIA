@@ -349,17 +349,59 @@ fun AppNavigation() {
                 )
             }
 
+            // --- BLOQUE DE INTELIGENCIA ARTIFICIAL ---
+
             composable(Routes.AI) {
                 if (!session.canAccessDashboard) return@composable
+                // Este es el ViewModel original que inicia la información
                 val vm: AiViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
 
                 AiScreen(
                     state = state,
                     vm = vm,
-                    onNavigateToAddSale = { navController.navigate(Routes.ADD_SALE) }
+                    onNavigateToAddSale = { navController.navigate(Routes.ADD_SALE) },
+                    onNavigateToLoading = { navController.navigate(Routes.AI_LOADING) }
                 )
             }
+
+            composable(Routes.AI_LOADING) { navBackStackEntry ->
+                if (!session.canAccessDashboard) return@composable
+
+                // Obtenemos el MISMO ViewModel de la ruta Routes.AI
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.AI) }
+                val vm: AiViewModel = viewModel(parentEntry, factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+
+                AiLoadingScreen(
+                    state = state,
+                    vm = vm,
+                    onNavigateToChat = {
+                        // Navegamos al chat y eliminamos la pantalla de carga del historial
+                        // para que si el usuario presiona "Atrás", vuelva a la pantalla principal de AI.
+                        navController.navigate(Routes.AI_CHAT) {
+                            popUpTo(Routes.AI_LOADING) { inclusive = true }
+                        }
+                    },
+                    onCancel = { navController.popBackStack() }
+                )
+            }
+
+            composable(Routes.AI_CHAT) { navBackStackEntry ->
+                if (!session.canAccessDashboard) return@composable
+
+                // Nuevamente, obtenemos el MISMO ViewModel de la ruta Routes.AI
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.AI) }
+                val vm: AiViewModel = viewModel(parentEntry, factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+
+                AiChatScreen(
+                    state = state,
+                    vm = vm,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             composable(Routes.PROFILE) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: ProfileViewModel = viewModel(factory = factory)
@@ -383,6 +425,8 @@ fun AppNavigation() {
         }
     }
 }
+
+// --- ESTAS SON LAS FUNCIONES QUE FALTABAN PARA QUE NO DE ERROR ---
 
 private fun NavHostController.navigateAndClear(route: String) {
     navigate(route) {

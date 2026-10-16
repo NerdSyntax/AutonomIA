@@ -39,13 +39,15 @@ private val TextGray = Color(0xFF475569)
 fun AiScreen(
     state: AiUiState,
     vm: AiViewModel,
-    onNavigateToAddSale: () -> Unit
+    onNavigateToAddSale: () -> Unit,
+    onNavigateToLoading: () -> Unit
 ) {
     if (state.mostrarAdvertencia) {
         AiInsufficientDataScreen(
             onNavigateToAddSale = onNavigateToAddSale,
             onNavigateBack = { vm.onOcultarAdvertencia() }
         )
+
     } else {
         Column(
             modifier = Modifier
@@ -203,7 +205,11 @@ fun AiScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
-                    onClick = { vm.onAnalizarClick() },
+                    onClick = {
+                        vm.onAnalizarClick(
+                            onNavigateToLoading = onNavigateToLoading
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),

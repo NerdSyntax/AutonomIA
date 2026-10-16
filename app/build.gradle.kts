@@ -79,6 +79,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    //api ia
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
     // Tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
