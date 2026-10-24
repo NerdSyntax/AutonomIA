@@ -18,15 +18,19 @@ object Routes {
     const val VERIFY_EMAIL = "verify_email"
 
     // Menú inferior
-    const val DASHBOARD = "dashboard"      // Inicio
-    const val MOVEMENTS = "movements"      // Movimientos
-    const val BUSINESS = "business"        // Negocio
-    const val AI = "ai"                    // IA
-    const val PROFILE = "profile"          // Perfil
+    const val DASHBOARD = "dashboard"
+    const val MOVEMENTS = "movements"
+    const val BUSINESS = "business"
+    const val AI = "ai"
+    const val PROFILE = "profile"
 
-    // Otras pantallas
+    // Cuenta
     const val ACCOUNT = "account"
 
-    const val AI_LOADING = "ai_loading"
+    // Inteligencia artificial
     const val AI_CHAT = "ai_chat"
+    const val AI_MONTHLY = "ai_monthly"
+
+    // Se conserva hasta actualizar el flujo anterior.
+    const val AI_LOADING = "ai_loading"
 }

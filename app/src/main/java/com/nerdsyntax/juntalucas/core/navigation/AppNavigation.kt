@@ -1,9 +1,13 @@
 package com.nerdsyntax.juntalucas.core.navigation
 
+
+
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.lifecycle.Lifecycle
@@ -202,20 +206,37 @@ fun AppNavigation() {
 
             composable(Routes.DASHBOARD) {
                 if (!session.canAccessDashboard) return@composable
+
                 val vm: DashboardViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                    vm.refresh()
+                }
 
                 DashboardScreen(
                     state = state,
                     onNavigateToAi = {
-                        navController.navigateToBottomRoute(Routes.AI)
+                        navController.navigate(Routes.AI) {
+                            launchSingleTop = true
+                        }
+
+                        navController.navigate(Routes.AI_CHAT) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToMonthlyAnalysis = {
+                        navController.navigate(Routes.AI_MONTHLY) {
+                            launchSingleTop = true
+                        }
                     },
                     onFilterSelected = vm::selectFilter,
                     onCustomStart = vm::onCustomStart,
                     onCustomEnd = vm::onCustomEnd,
                     onRetry = vm::refresh,
-                    onViewAll = { navController.navigateToBottomRoute(Routes.MOVEMENTS) }
+                    onViewAll = {
+                        navController.navigateToBottomRoute(Routes.MOVEMENTS)
+                    }
                 )
             }
             composable(Routes.MOVEMENTS) {
@@ -353,15 +374,29 @@ fun AppNavigation() {
 
             composable(Routes.AI) {
                 if (!session.canAccessDashboard) return@composable
-                // Este es el ViewModel original que inicia la información
+
                 val vm: AiViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
 
                 AiScreen(
                     state = state,
                     vm = vm,
-                    onNavigateToAddSale = { navController.navigate(Routes.ADD_SALE) },
-                    onNavigateToLoading = { navController.navigate(Routes.AI_LOADING) }
+                    onNavigateToAddSale = {
+                        navController.navigate(Routes.ADD_SALE)
+                    },
+                    onNavigateToLoading = {
+                        navController.navigate(Routes.AI_LOADING)
+                    },
+                    onNavigateToChat = {
+                        navController.navigate(Routes.AI_CHAT) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToMonthly = {
+                        navController.navigate(Routes.AI_MONTHLY) {
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
 
@@ -390,15 +425,32 @@ fun AppNavigation() {
             composable(Routes.AI_CHAT) { navBackStackEntry ->
                 if (!session.canAccessDashboard) return@composable
 
-                // Nuevamente, obtenemos el MISMO ViewModel de la ruta Routes.AI
-                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.AI) }
-                val vm: AiViewModel = viewModel(parentEntry, factory = factory)
+                val parentEntry = remember(navBackStackEntry) {
+                    navController.getBackStackEntry(Routes.AI)
+                }
+
+                val vm: AiViewModel = viewModel(
+                    viewModelStoreOwner = parentEntry,
+                    factory = factory
+                )
+
                 val state by vm.uiState.collectAsStateWithLifecycle()
 
                 AiChatScreen(
                     state = state,
                     vm = vm,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+            composable(Routes.AI_MONTHLY) {
+                if (!session.canAccessDashboard) return@composable
+
+                AiMonthlyScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
                 )
             }
 

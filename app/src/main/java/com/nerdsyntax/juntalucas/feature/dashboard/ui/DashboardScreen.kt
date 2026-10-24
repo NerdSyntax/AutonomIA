@@ -37,6 +37,7 @@ private val PurpleAi = Color(0xFF8B5CF6)
 fun DashboardScreen(
     state: DashboardUiState,
     onNavigateToAi: () -> Unit,
+    onNavigateToMonthlyAnalysis: () -> Unit,
     onFilterSelected: (DashboardPeriodFilter) -> Unit = {},
     onCustomStart: (String) -> Unit = {},
     onCustomEnd: (String) -> Unit = {},
@@ -44,7 +45,10 @@ fun DashboardScreen(
     onViewAll: () -> Unit = {}
 ) {
     if (state.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
             CircularProgressIndicator(color = DarkBlue)
         }
         return
@@ -56,26 +60,49 @@ fun DashboardScreen(
             .background(LightBg)
             .verticalScroll(rememberScrollState())
     ) {
-        HeaderSection(state, onFilterSelected, onCustomStart, onCustomEnd)
+        HeaderSection(
+            state = state,
+            onFilterSelected = onFilterSelected,
+            onCustomStart = onCustomStart,
+            onCustomEnd = onCustomEnd
+        )
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = onRetry) { Text("Reintentar") } }
+            state.errorMessage?.let { message ->
+                Column {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    TextButton(onClick = onRetry) {
+                        Text("Reintentar")
+                    }
+                }
+            }
+
             GoalSection(state)
             KpiGridSection(state)
 
-            AiBannerSection(onClick = onNavigateToAi)
+            AiAccessSection(
+                onChatClick = onNavigateToAi,
+                onMonthlyClick = onNavigateToMonthlyAnalysis
+            )
 
-            RecentMovementsSection(state.movimientosRecientes, onViewAll)
+            RecentMovementsSection(
+                movimientos = state.movimientosRecientes,
+                onViewAll = onViewAll
+            )
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
-
 @Composable
 private fun HeaderSection(state: DashboardUiState, onFilterSelected: (DashboardPeriodFilter) -> Unit, onCustomStart: (String) -> Unit, onCustomEnd: (String) -> Unit) {
     val context = LocalContext.current
@@ -214,27 +241,143 @@ private fun KpiCard(
 }
 
 @Composable
-private fun AiBannerSection(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                brush = Brush.horizontalGradient(listOf(Color(0xFF6366F1), Color(0xFF9333EA)))
-            )
-            .clickable { onClick() }
-            .padding(16.dp)
+private fun AiAccessSection(
+    onChatClick: () -> Unit,
+    onMonthlyClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).background(Color.White.copy(alpha = 0.2f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "IA", tint = Color.White)
+        // Acceso al chat
+        Surface(
+            onClick = onChatClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = Color.Transparent
+        ) {
+            Row(
+                modifier = Modifier
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF6366F1),
+                                Color(0xFF9333EA)
+                            )
+                        )
+                    )
+                    .padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.18f),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChatBubbleOutline,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Chat de mi negocio",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Conversa y resuelve tus dudas con IA",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = Color.White
+                )
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Analizar mi negocio con IA", color = Color.White, fontWeight = FontWeight.Bold)
-                Text("Recibe hasta 3 recomendaciones", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+        }
+
+        // Acceso al análisis mensual
+        Surface(
+            onClick = onMonthlyClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFFF5F3FF),
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = Color(0xFFDDD6FE)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            color = Color(0xFFEDE9FE),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = Color(0xFF6D28D9),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Análisis mensual",
+                        color = DarkBlue,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Revisa tus resultados mes a mes",
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = Color(0xFF6D28D9)
+                )
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = "Ir", tint = Color.White)
         }
     }
 }
