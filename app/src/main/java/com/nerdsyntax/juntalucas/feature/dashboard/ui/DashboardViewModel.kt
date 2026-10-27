@@ -7,11 +7,21 @@ import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.Business
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
-import com.nerdsyntax.juntalucas.feature.dashboard.domain.*
-import com.nerdsyntax.juntalucas.feature.movements.domain.*
-import kotlinx.coroutines.coroutineScope
+import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardDateRange
+import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
+import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriods
+import com.nerdsyntax.juntalucas.feature.movements.domain.Expense
+import com.nerdsyntax.juntalucas.feature.movements.domain.ExpensesRepository
+import com.nerdsyntax.juntalucas.feature.movements.domain.Sale
+import com.nerdsyntax.juntalucas.feature.movements.domain.SalesRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 class DashboardViewModel(
     private val authRepository: AuthRepository,
@@ -19,106 +29,565 @@ class DashboardViewModel(
     private val salesRepository: SalesRepository? = null,
     private val expensesRepository: ExpensesRepository? = null
 ) : ViewModel() {
+
     private val filter = MutableStateFlow(DashboardPeriodFilter.MONTH)
     private val customStart = MutableStateFlow("")
     private val customEnd = MutableStateFlow("")
     private val retry = MutableStateFlow(0)
-    private val _uiState = MutableStateFlow(DashboardUiState(isLoading = true))
+
+    private val _uiState = MutableStateFlow(
+        DashboardUiState(isLoading = true)
+    )
     val uiState = _uiState.asStateFlow()
 
-    private var business: Business? = null
-    private var sales = emptyList<Sale>()
-    private var monthlySales = emptyList<Sale>()
-    private var expenses = emptyList<Expense>()
-    private var error: String? = null
-    private var loading = false
-    private var fromCache = false
-    private var pendingLoads = 0
+    private val locale = Locale.forLanguageTag("es-CL")
 
     init {
         viewModelScope.launch {
-            authRepository.currentUser.map { it?.uid }.distinctUntilChanged().collectLatest { uid ->
-                business = null; sales = emptyList(); monthlySales = emptyList(); expenses = emptyList(); error = null; fromCache = false
-                loading = uid != null
-                _uiState.value = DashboardUiState(userName = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: "Usuario", isLoading = loading)
-                if (uid == null) { _uiState.value = DashboardUiState(errorMessage = "Inicia sesión para ver tu negocio."); return@collectLatest }
-                loadBusiness(uid)
-                combine(filter, customStart, customEnd, retry) { selected, start, end, _ -> selected to (start to end) }
-                    .collectLatest { (selected, dates) -> loadPeriod(uid, selected, dates.first, dates.second) }
+            authRepository.currentUser
+                .map { it?.uid }
+                .distinctUntilChanged()
+                .collectLatest { uid ->
+                    _uiState.value = DashboardUiState(
+                        userName = userName(),
+                        isLoading = uid != null,
+                        graficosCargando = uid != null
+                    )
+
+                    if (uid == null) {
+                        _uiState.update {
+                            it.copy(
+                                errorMessage =
+                                    "Inicia sesión para ver tu negocio."
+                            )
+                        }
+                        return@collectLatest
+                    }
+
+                    combine(
+                        filter,
+                        customStart,
+                        customEnd,
+                        retry
+                    ) { selected, start, end, _ ->
+                        PeriodSelection(selected, start, end)
+                    }.collectLatest { selection ->
+                        loadPeriod(uid, selection)
+                    }
+                }
+        }
+    }
+
+    fun refresh() {
+        retry.update { it + 1 }
+    }
+
+    fun selectFilter(value: DashboardPeriodFilter) {
+        filter.value = value
+    }
+
+    fun onCustomStart(value: String) {
+        customStart.value = value
+        _uiState.update { it.copy(customStart = value) }
+    }
+
+    fun onCustomEnd(value: String) {
+        customEnd.value = value
+        _uiState.update { it.copy(customEnd = value) }
+    }
+
+    private fun userName(): String {
+        return authRepository.currentUser.value
+            ?.displayName
+            ?.takeIf { it.isNotBlank() }
+            ?: "Usuario"
+    }
+
+    private fun resolveRange(
+        selection: PeriodSelection
+    ): DashboardDateRange? {
+        return when (selection.filter) {
+            DashboardPeriodFilter.WEEK ->
+                DashboardPeriods.weekRange()
+
+            DashboardPeriodFilter.MONTH ->
+                DashboardPeriods.monthRange()
+
+            DashboardPeriodFilter.YEAR ->
+                DashboardPeriods.yearRange()
+
+            DashboardPeriodFilter.CUSTOM -> {
+                if (
+                    DashboardPeriods.valid(selection.start) &&
+                    DashboardPeriods.valid(selection.end) &&
+                    selection.start <= selection.end
+                ) {
+                    DashboardPeriods.customRange(
+                        selection.start,
+                        selection.end
+                    )
+                } else {
+                    null
+                }
             }
         }
     }
 
-    fun refresh() { retry.value += 1 }
-    fun selectFilter(value: DashboardPeriodFilter) { filter.value = value; if (value != DashboardPeriodFilter.CUSTOM) refresh() }
-    fun onCustomStart(value: String) { customStart.value = value; _uiState.update { it.copy(customStart = value) } }
-    fun onCustomEnd(value: String) { customEnd.value = value; _uiState.update { it.copy(customEnd = value) } }
+    private fun periodLabel(selection: PeriodSelection): String {
+        return when (selection.filter) {
+            DashboardPeriodFilter.WEEK -> "Semana actual"
+            DashboardPeriodFilter.MONTH -> "Mes actual"
+            DashboardPeriodFilter.YEAR -> "Año actual"
 
-    private suspend fun loadBusiness(uid: String) {
-        businessRepository.getBusiness().fold({ business = it }, { error = it.salesUserMessage() })
-        if (authRepository.currentUser.value?.uid == uid) render()
-    }
+            DashboardPeriodFilter.CUSTOM -> {
+                if (
+                    DashboardPeriods.valid(selection.start) &&
+                    DashboardPeriods.valid(selection.end)
+                ) {
+                    val formatter = DateTimeFormatter.ofPattern(
+                        "dd/MM/yyyy"
+                    )
+                    val start = LocalDate.parse(selection.start)
+                        .format(formatter)
+                    val end = LocalDate.parse(selection.end)
+                        .format(formatter)
 
-    private suspend fun loadPeriod(uid: String, selected: DashboardPeriodFilter, start: String, end: String) {
-        val range = when (selected) {
-            DashboardPeriodFilter.WEEK -> DashboardPeriods.weekRange()
-            DashboardPeriodFilter.MONTH -> DashboardPeriods.monthRange()
-            DashboardPeriodFilter.CUSTOM -> if (DashboardPeriods.valid(start) && DashboardPeriods.valid(end) && start <= end) DashboardPeriods.customRange(start, end) else null
-        }
-        if (range == null) { error = "Selecciona un rango de fechas válido."; loading = false; render(); return }
-        sales = emptyList(); monthlySales = emptyList(); expenses = emptyList(); error = null; fromCache = false; pendingLoads = 2; loading = salesRepository != null || expensesRepository != null; render()
-        val salesSource = salesRepository; val expensesSource = expensesRepository
-        if (salesSource == null || expensesSource == null) { loading = false; render(); return }
-        coroutineScope {
-            launch { salesSource.observeRange(uid, range.start, range.endExclusive).collect { result ->
-                pendingLoads = (pendingLoads - 1).coerceAtLeast(0); loading = pendingLoads > 0
-                result.fold({ data -> sales = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
-                render()
-            } }
-            launch { expensesSource.observeRange(uid, range.start, range.endExclusive).collect { result ->
-                pendingLoads = (pendingLoads - 1).coerceAtLeast(0); loading = pendingLoads > 0
-                result.fold({ data -> expenses = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
-                render()
-            } }
-            launch { salesSource.observeRange(uid, "${DashboardPeriods.currentMonth()}-01", DashboardPeriods.monthRange().endExclusive).collect { result ->
-                result.fold({ data -> monthlySales = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
-                render()
-            } }
+                    "$start – $end"
+                } else {
+                    "Personalizado"
+                }
+            }
         }
     }
 
-    private fun render() {
-        val selected = filter.value
-        val rangeLabel = when (selected) { DashboardPeriodFilter.WEEK -> "Semana"; DashboardPeriodFilter.MONTH -> "Mes actual"; DashboardPeriodFilter.CUSTOM -> "Personalizado" }
-        val salesTotal = sales.fold(0L) { total, item -> runCatching { Math.addExact(total, item.draft.total) }.getOrElse { total } }
-        val expensesTotal = expenses.fold(0L) { total, item -> runCatching { Math.addExact(total, item.draft.amount) }.getOrElse { total } }
-        val balance = salesTotal - expensesTotal
-        val recent = (sales.map { MovementRow(it.draft.saleDate, it.createdAtMillis, it.draft.id, it.productName, "+${formatClp(it.draft.total)}", true) } +
-                expenses.map { MovementRow(it.draft.expenseDate, it.createdAtMillis, it.draft.id, it.draft.description, "-${formatClp(it.draft.amount)}", false) })
-            .sortedWith(compareByDescending<MovementRow> { it.date }.thenByDescending { it.createdAt }.thenBy { it.id }).take(5)
-            .map { MovimientoUi(it.id, it.title, it.date, it.amount, it.income) }
-        val monthlyGoal = business?.metaMensual ?: 0L
-        val monthSales = monthlySales.sumOf { it.draft.total }
-        _uiState.value = _uiState.value.copy(
-            userName = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: "Usuario",
-            nombreNegocio = business?.nombreNegocio.orEmpty(),
-            metaMensual = monthlyGoal,
-            ventasTotales = salesTotal,
-            ventasMesActual = monthSales,
-            gastosTotales = expensesTotal,
-            ganancia = balance,
-            balanceMovimientos = balance,
-            margen = "—",
-            movimientosRecientes = recent,
-            selectedFilter = selected,
-            periodLabel = rangeLabel,
-            customStart = customStart.value,
-            customEnd = customEnd.value,
-            isLoading = loading,
-            errorMessage = error,
-            fromCache = fromCache
+    private suspend fun loadPeriod(
+        uid: String,
+        selection: PeriodSelection
+    ) {
+        _uiState.update {
+            it.copy(
+                selectedFilter = selection.filter,
+                periodLabel = periodLabel(selection),
+                customStart = selection.start,
+                customEnd = selection.end,
+                ventasTotales = 0L,
+                gastosTotales = 0L,
+                ganancia = 0L,
+                gananciaBruta = null,
+                balanceMovimientos = 0L,
+                margen = "Cargando…",
+                movimientosRecientes = emptyList(),
+                mesesGrafico = emptyList(),
+                distribucionGastos = emptyList(),
+                errorMessage = null,
+                errorGraficos = null,
+                isLoading = true,
+                graficosCargando = true,
+                fromCache = false,
+                graficosDesdeCache = false
+            )
+        }
+
+        try {
+            val range = resolveRange(selection)
+
+            if (range == null) {
+                showError("Selecciona un rango de fechas válido.")
+                return
+            }
+
+            val salesSource = salesRepository
+            val expensesSource = expensesRepository
+
+            if (salesSource == null || expensesSource == null) {
+                showError(
+                    "No se pudieron conectar los datos del negocio."
+                )
+                return
+            }
+
+            val businessResult = businessRepository.getBusiness()
+
+            if (authRepository.currentUser.value?.uid != uid) {
+                return
+            }
+
+            val business = businessResult.getOrNull()
+            val businessError = businessResult.exceptionOrNull()
+                ?.salesUserMessage()
+
+            _uiState.update {
+                it.copy(
+                    nombreNegocio = business?.nombreNegocio.orEmpty(),
+                    metaMensual = business?.metaMensual ?: 0L
+                )
+            }
+
+            val currentMonthRange = DashboardPeriods.monthRange()
+
+            // Las tarjetas y los gráficos usan el mismo periodo.
+            val periodData = combine(
+                salesSource.observeRange(
+                    uid,
+                    range.start,
+                    range.endExclusive
+                ),
+                expensesSource.observeRange(
+                    uid,
+                    range.start,
+                    range.endExclusive
+                )
+            ) { salesResult, expensesResult ->
+                salesResult to expensesResult
+            }
+
+            combine(
+                periodData,
+                salesSource.observeRange(
+                    uid,
+                    currentMonthRange.start,
+                    currentMonthRange.endExclusive
+                )
+            ) { periodResults, monthlyResult ->
+                Triple(
+                    periodResults.first,
+                    periodResults.second,
+                    monthlyResult
+                )
+            }.collect { (salesResult, expensesResult, monthlyResult) ->
+                if (authRepository.currentUser.value?.uid != uid) {
+                    return@collect
+                }
+
+                val periodError = salesResult.exceptionOrNull()
+                    ?: expensesResult.exceptionOrNull()
+
+                if (periodError != null) {
+                    showError(periodError.salesUserMessage())
+                    return@collect
+                }
+
+                val salesData = salesResult.getOrThrow()
+                val expensesData = expensesResult.getOrThrow()
+                val monthlyData = monthlyResult.getOrNull()
+
+                val additionalError =
+                    monthlyResult.exceptionOrNull()?.salesUserMessage()
+                        ?: businessError
+
+                render(
+                    selection = selection,
+                    range = range,
+                    business = business,
+                    sales = salesData.value,
+                    expenses = expensesData.value,
+                    monthlySales = monthlyData?.value.orEmpty(),
+                    fromCache = salesData.fromCache ||
+                            expensesData.fromCache ||
+                            (monthlyData?.fromCache == true),
+                    periodFromCache = salesData.fromCache ||
+                            expensesData.fromCache,
+                    additionalError = additionalError
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (authRepository.currentUser.value?.uid == uid) {
+                showError(error.salesUserMessage())
+            }
+        }
+    }
+
+    private fun showError(message: String) {
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                graficosCargando = false,
+                errorMessage = message,
+                errorGraficos = message,
+                ventasTotales = 0L,
+                gastosTotales = 0L,
+                ganancia = 0L,
+                gananciaBruta = null,
+                balanceMovimientos = 0L,
+                margen = "No disponible",
+                movimientosRecientes = emptyList(),
+                mesesGrafico = emptyList(),
+                distribucionGastos = emptyList()
+            )
+        }
+    }
+
+    private fun grossProfit(sales: List<Sale>): Double? {
+        if (sales.isEmpty() || sales.any { it.unitCost == null }) {
+            return null
+        }
+
+        val total = sales.sumOf { it.draft.total }
+        val costs = sales.sumOf {
+            requireNotNull(it.unitCost).toDouble() *
+                    it.draft.quantity.toDouble()
+        }
+
+        return total.toDouble() - costs
+    }
+
+    private fun buildExpenseDistribution(
+        expenses: List<Expense>
+    ): List<GastoCategoriaUi> {
+        // Agrupa por la categoría registrada.
+        // Unifica espacios y diferencias de mayúsculas.
+        val groups = expenses.groupBy { expense ->
+            expense.draft.category
+                .trim()
+                .replace(Regex("\\s+"), " ")
+                .ifBlank { "Sin categoría" }
+                .lowercase(locale)
+        }
+
+        return groups.map { (_, categoryExpenses) ->
+            val categoryName = categoryExpenses.first().draft.category
+                .trim()
+                .replace(Regex("\\s+"), " ")
+                .ifBlank { "Sin categoría" }
+                .replaceFirstChar { it.uppercase(locale) }
+
+            GastoCategoriaUi(
+                categoria = categoryName,
+                monto = categoryExpenses.sumOf { it.draft.amount }
+            )
+        }.sortedWith(
+            compareByDescending<GastoCategoriaUi> { it.monto }
+                .thenBy { it.categoria }
         )
     }
 
-    private data class MovementRow(val date: String, val createdAt: Long, val id: String, val title: String, val amount: String, val income: Boolean)
+    private fun render(
+        selection: PeriodSelection,
+        range: DashboardDateRange,
+        business: Business?,
+        sales: List<Sale>,
+        expenses: List<Expense>,
+        monthlySales: List<Sale>,
+        fromCache: Boolean,
+        periodFromCache: Boolean,
+        additionalError: String?
+    ) {
+        val salesTotal = sales.sumOf { it.draft.total }
+        val expensesTotal = expenses.sumOf { it.draft.amount }
+        val balance = salesTotal - expensesTotal
+        val grossProfit = grossProfit(sales)
+
+        val margin = when {
+            sales.isEmpty() -> "Sin ventas"
+            salesTotal <= 0L -> "No disponible"
+            grossProfit == null -> "Faltan costos"
+
+            else -> String.format(
+                locale,
+                "%.1f %%",
+                grossProfit / salesTotal.toDouble() * 100.0
+            )
+        }
+
+        val recent = (
+                sales.map {
+                    MovementRow(
+                        date = it.draft.saleDate,
+                        createdAt = it.createdAtMillis,
+                        id = "venta_${it.draft.id}",
+                        title = it.productName,
+                        amount = "+${formatClp(it.draft.total)}",
+                        income = true
+                    )
+                } +
+                        expenses.map {
+                            MovementRow(
+                                date = it.draft.expenseDate,
+                                createdAt = it.createdAtMillis,
+                                id = "gasto_${it.draft.id}",
+                                title = it.draft.description,
+                                amount = "-${formatClp(it.draft.amount)}",
+                                income = false
+                            )
+                        }
+                )
+            .sortedWith(
+                compareByDescending<MovementRow> { it.date }
+                    .thenByDescending { it.createdAt }
+                    .thenBy { it.id }
+            )
+            .take(5)
+            .map {
+                MovimientoUi(
+                    id = it.id,
+                    titulo = it.title,
+                    fecha = it.date,
+                    montoStr = it.amount,
+                    esIngreso = it.income
+                )
+            }
+
+        val chartData = buildChartData(
+            selection = selection,
+            range = range,
+            sales = sales,
+            expenses = expenses
+        )
+
+        val expenseDistribution = buildExpenseDistribution(expenses)
+        val productDistribution = sales
+            .groupBy { it.draft.productId }
+            .map { (productId, productSales) ->
+                // Usa el nombre de la venta más reciente del periodo.
+                val latestSale = productSales.maxWithOrNull(
+                    compareBy<Sale> { it.draft.saleDate }
+                        .thenBy { it.createdAtMillis }
+                )!!
+
+                VentaProductoUi(
+                    id = productId,
+                    nombre = latestSale.productName,
+                    monto = productSales.sumOf { it.draft.total }
+                )
+            }
+            .sortedWith(
+                compareByDescending<VentaProductoUi> { it.monto }
+                    .thenBy { it.nombre }
+            )
+        _uiState.update {
+            it.copy(
+                userName = userName(),
+                nombreNegocio = business?.nombreNegocio.orEmpty(),
+                metaMensual = business?.metaMensual ?: 0L,
+                ventasTotales = salesTotal,
+                ventasMesActual = monthlySales.sumOf { sale ->
+                    sale.draft.total
+                },
+                gastosTotales = expensesTotal,
+
+                // Compatibilidad con los campos anteriores.
+                ganancia = balance,
+                balanceMovimientos = balance,
+
+                gananciaBruta = grossProfit,
+                margen = margin,
+                movimientosRecientes = recent,
+                selectedFilter = selection.filter,
+                periodLabel = periodLabel(selection),
+                customStart = selection.start,
+                customEnd = selection.end,
+                isLoading = false,
+                errorMessage = additionalError,
+                fromCache = fromCache,
+                mesesGrafico = chartData,
+                graficosCargando = false,
+                errorGraficos = null,
+                graficosDesdeCache = periodFromCache,
+                distribucionGastos = expenseDistribution,
+                ventasPorProducto = productDistribution
+            )
+        }
+    }
+
+    private fun buildChartData(
+        selection: PeriodSelection,
+        range: DashboardDateRange,
+        sales: List<Sale>,
+        expenses: List<Expense>
+    ): List<MesGraficoUi> {
+        if (sales.isEmpty() && expenses.isEmpty()) {
+            return emptyList()
+        }
+
+        val start = LocalDate.parse(range.start)
+        val endExclusive = LocalDate.parse(range.endExclusive)
+        val days = ChronoUnit.DAYS.between(start, endExclusive)
+
+        val groupByMonth =
+            selection.filter == DashboardPeriodFilter.YEAR ||
+                    (
+                            selection.filter == DashboardPeriodFilter.CUSTOM &&
+                                    days > 62
+                            )
+
+        fun key(date: String): String {
+            return if (groupByMonth) date.take(7) else date
+        }
+
+        val salesByPeriod = sales.groupBy {
+            key(it.draft.saleDate)
+        }
+
+        val expensesByPeriod = expenses.groupBy {
+            key(it.draft.expenseDate)
+        }
+
+        val periods = mutableListOf<String>()
+
+        if (groupByMonth) {
+            var month = YearMonth.from(start)
+            val lastMonth = YearMonth.from(endExclusive.minusDays(1))
+
+            while (!month.isAfter(lastMonth)) {
+                periods.add(month.toString())
+                month = month.plusMonths(1)
+            }
+        } else {
+            var day = start
+
+            while (day.isBefore(endExclusive)) {
+                periods.add(day.toString())
+                day = day.plusDays(1)
+            }
+        }
+
+        val monthFormatter = DateTimeFormatter.ofPattern(
+            "MMM yy",
+            locale
+        )
+        val dayFormatter = DateTimeFormatter.ofPattern(
+            "dd/MM",
+            locale
+        )
+
+        return periods.map { period ->
+            val periodSales = salesByPeriod[period].orEmpty()
+            val periodExpenses = expensesByPeriod[period].orEmpty()
+
+            val label = if (groupByMonth) {
+                YearMonth.parse(period)
+                    .format(monthFormatter)
+                    .replace(".", "")
+                    .replaceFirstChar { it.uppercase() }
+            } else {
+                LocalDate.parse(period).format(dayFormatter)
+            }
+
+            MesGraficoUi(
+                periodo = period,
+                etiqueta = label,
+                ventas = periodSales.sumOf { it.draft.total },
+                gastos = periodExpenses.sumOf { it.draft.amount },
+                gananciaBruta = grossProfit(periodSales),
+                tieneVentas = periodSales.isNotEmpty()
+            )
+        }
+    }
+
+    private data class PeriodSelection(
+        val filter: DashboardPeriodFilter,
+        val start: String,
+        val end: String
+    )
+
+    private data class MovementRow(
+        val date: String,
+        val createdAt: Long,
+        val id: String,
+        val title: String,
+        val amount: String,
+        val income: Boolean
+    )
 }

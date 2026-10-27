@@ -45,6 +45,11 @@ dependencies {
 
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+// Gráficos Vico para Jetpack Compose y Material 3
+    implementation("com.patrykandpatrick.vico:compose:3.3.1")
+    implementation("com.patrykandpatrick.vico:compose-m3:3.3.1")
+
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)

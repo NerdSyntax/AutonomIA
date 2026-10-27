@@ -1,6 +1,7 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import androidx.compose.foundation.background
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,7 +25,7 @@ import java.util.Locale
 import android.app.DatePickerDialog
 import androidx.compose.ui.platform.LocalContext
 import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
-
+import androidx.compose.runtime.*
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
@@ -87,11 +88,23 @@ fun DashboardScreen(
             }
 
             GoalSection(state)
+
             KpiGridSection(state)
 
             AiAccessSection(
                 onChatClick = onNavigateToAi,
                 onMonthlyClick = onNavigateToMonthlyAnalysis
+            )
+
+            DashboardCharts(
+                state = state,
+                onRetry = onRetry
+            )
+            ExpenseDistributionCard(
+                categorias = state.distribucionGastos,
+                productos = state.ventasPorProducto,
+                isLoading = state.graficosCargando,
+                errorMessage = state.errorGraficos
             )
 
             RecentMovementsSection(
@@ -190,198 +203,275 @@ private fun GoalSection(state: DashboardUiState) {
 
 @Composable
 private fun KpiGridSection(state: DashboardUiState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        KpiCard(
-            modifier = Modifier.weight(1f), title = "Ventas totales", amount = formatPesos(state.ventasTotales),
-            iconColor = GreenPos, icon = Icons.Default.ArrowUpward
-        )
-        KpiCard(
-            modifier = Modifier.weight(1f), title = "Gastos totales", amount = formatPesos(state.gastosTotales),
-            iconColor = RedNeg, icon = Icons.Default.ArrowDownward
-        )
+    val verde = Color(0xFF15803D)
+    val rojo = Color(0xFFB91C1C)
+    val azul = Color(0xFF1D4ED8)
+    val morado = Color(0xFF6D28D9)
+    val ambar = Color(0xFF92400E)
+
+    var ayuda by remember {
+        mutableStateOf<Pair<String, String>?>(null)
     }
-    Row(
+
+    val gananciaBruta = state.gananciaBruta
+
+    val textoGanancia = when {
+        state.isLoading -> "Cargando…"
+        state.errorMessage != null -> "No disponible"
+        gananciaBruta != null -> {
+            "$" + NumberFormat
+                .getIntegerInstance(Locale.forLanguageTag("es-CL"))
+                .format(gananciaBruta)
+        }
+        state.margen == "Sin ventas" -> "Sin ventas"
+        else -> "Faltan costos"
+    }
+
+    val colorGanancia = when {
+        gananciaBruta == null -> ambar
+        gananciaBruta < 0.0 -> rojo
+        else -> azul
+    }
+
+    val colorMargen = when {
+        !state.margen.trim().endsWith("%") -> ambar
+        state.margen.trim().startsWith("-") -> rojo
+        else -> morado
+    }
+
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        KpiCard(
-            modifier = Modifier.weight(1f), title = "Balance de movimientos", amount = formatPesos(state.balanceMovimientos),
-            iconColor = RedNeg, icon = Icons.Default.QueryBuilder, amountColor = OrangeWarn
-        )
-        KpiCard(
-            modifier = Modifier.weight(1f), title = "Margen", amount = state.margen,
-            iconColor = RedNeg, icon = Icons.Default.ShowChart, amountColor = OrangeWarn
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Ventas totales",
+                amount = formatPesos(state.ventasTotales),
+                color = verde,
+                backgroundColor = Color(0xFFF0FDF4),
+                icon = Icons.Default.ArrowUpward
+            )
+
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Gastos totales",
+                amount = formatPesos(state.gastosTotales),
+                color = rojo,
+                backgroundColor = Color(0xFFFEF2F2),
+                icon = Icons.Default.ArrowDownward
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Ganancia bruta",
+                amount = textoGanancia,
+                color = colorGanancia,
+                backgroundColor = Color(0xFFEFF6FF),
+                icon = Icons.Default.Info,
+                onInfoClick = {
+                    ayuda = "Ganancia bruta" to
+                            "Ventas menos el costo histórico de los productos " +
+                            "o servicios vendidos. No descuenta otros gastos, " +
+                            "como arriendo o administración. Si una venta no " +
+                            "tiene su costo registrado, aparece «Faltan costos»."
+                }
+            )
+
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Margen bruto",
+                amount = state.margen,
+                color = colorMargen,
+                backgroundColor = Color(0xFFF5F3FF),
+                icon = Icons.Default.Info,
+                onInfoClick = {
+                    ayuda = "Margen bruto" to
+                            "Es la ganancia bruta dividida entre las ventas, " +
+                            "multiplicada por 100. Un margen del 40 % significa " +
+                            "que quedan $40 por cada $100 vendidos, antes de " +
+                            "descontar otros gastos."
+                }
+            )
+        }
+    }
+
+    ayuda?.let { (titulo, mensaje) ->
+        AlertDialog(
+            onDismissRequest = { ayuda = null },
+            title = { Text(titulo) },
+            text = { Text(mensaje) },
+            confirmButton = {
+                TextButton(onClick = { ayuda = null }) {
+                    Text("Entendido")
+                }
+            }
         )
     }
 }
 
 @Composable
 private fun KpiCard(
-    modifier: Modifier, title: String, amount: String,
-    iconColor: Color, icon: androidx.compose.ui.graphics.vector.ImageVector,
-    amountColor: Color = GreenPos
+    modifier: Modifier,
+    title: String,
+    amount: String,
+    color: Color,
+    backgroundColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onInfoClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor
+        )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(title, color = Color.Gray, fontSize = 12.sp)
-                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 112.dp)
+                .padding(
+                    start = 14.dp,
+                    end = 14.dp,
+                    top = 6.dp,
+                    bottom = 16.dp
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFF475569),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (onInfoClick != null) {
+                    IconButton(
+                        onClick = onInfoClick,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Información sobre $title",
+                            tint = color,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(amount, color = if(title == "Gastos totales") RedNeg else amountColor, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+
+            Text(
+                text = amount,
+                color = color,
+                fontSize = if (amount.any { it.isLetter() }) 14.sp else 20.sp,
+                lineHeight = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
+
+
+
 
 @Composable
 private fun AiAccessSection(
     onChatClick: () -> Unit,
     onMonthlyClick: () -> Unit
 ) {
-    Column(
+    Surface(
+        onClick = onChatClick,
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent
     ) {
-        // Acceso al chat
-        Surface(
-            onClick = onChatClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = Color.Transparent
-        ) {
-            Row(
-                modifier = Modifier
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF6366F1),
-                                Color(0xFF9333EA)
-                            )
+        Row(
+            modifier = Modifier
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF6366F1),
+                            Color(0xFF9333EA)
                         )
                     )
-                    .padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .background(
-                            Color.White.copy(alpha = 0.18f),
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ChatBubbleOutline,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Chat de mi negocio",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = "Conversa y resuelve tus dudas con IA",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = Color.White
                 )
-            }
-        }
-
-        // Acceso al análisis mensual
-        Surface(
-            onClick = onMonthlyClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xFFF5F3FF),
-            border = androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = Color(0xFFDDD6FE)
-            )
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .background(
+                        color = Color.White.copy(alpha = 0.18f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .background(
-                            color = Color(0xFFEDE9FE),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = null,
-                        tint = Color(0xFF6D28D9),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Análisis mensual",
-                        color = DarkBlue,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = "Revisa tus resultados mes a mes",
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
                 Icon(
-                    imageVector = Icons.Default.ChevronRight,
+                    imageVector = Icons.Default.ChatBubbleOutline,
                     contentDescription = null,
-                    tint = Color(0xFF6D28D9)
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Chat de mi negocio",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+
+                Text(
+                    text = "Conversa sobre los datos de tu negocio",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color.White
+            )
         }
     }
 }
-
 @Composable
 private fun RecentMovementsSection(movimientos: List<MovimientoUi>, onViewAll: () -> Unit) {
     Card(

@@ -19,7 +19,18 @@ data class DashboardUiState(
     val fromCache: Boolean = false,
     val movimientosRecientes: List<MovimientoUi> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val gananciaBruta: Double? = null,
+
+    // Gráficos de ventas, gastos y ganancia bruta.
+    val mesesGrafico: List<MesGraficoUi> = emptyList(),
+    val graficosCargando: Boolean = true,
+    val errorGraficos: String? = null,
+    val graficosDesdeCache: Boolean = false,
+
+    // Gastos agrupados por categoría del periodo seleccionado.
+    val distribucionGastos: List<GastoCategoriaUi> = emptyList(),
+    val ventasPorProducto: List<VentaProductoUi> = emptyList(),
 )
 
 data class MovimientoUi(
@@ -28,4 +39,24 @@ data class MovimientoUi(
     val fecha: String,
     val montoStr: String,
     val esIngreso: Boolean
+)
+
+data class MesGraficoUi(
+    val periodo: String,
+    val etiqueta: String,
+    val ventas: Long,
+    val gastos: Long,
+    val gananciaBruta: Double?,
+    val tieneVentas: Boolean
+)
+
+data class GastoCategoriaUi(
+    val categoria: String,
+    val monto: Long
+)
+
+data class VentaProductoUi(
+    val id: String,
+    val nombre: String,
+    val monto: Long
 )
