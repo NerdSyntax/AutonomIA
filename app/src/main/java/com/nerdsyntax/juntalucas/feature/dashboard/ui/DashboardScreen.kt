@@ -1,6 +1,7 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import androidx.compose.foundation.background
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.BusinessPieChartCard
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodSelector
 import androidx.compose.foundation.clickable
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodDialog
@@ -106,6 +107,12 @@ fun DashboardScreen(
                 onRetry = onRetry
             )
             ExpenseDistributionCard(
+                categorias = state.distribucionGastos,
+                productos = state.ventasPorProducto,
+                isLoading = state.graficosCargando,
+                errorMessage = state.errorGraficos
+            )
+            BusinessPieChartCard(
                 categorias = state.distribucionGastos,
                 productos = state.ventasPorProducto,
                 isLoading = state.graficosCargando,

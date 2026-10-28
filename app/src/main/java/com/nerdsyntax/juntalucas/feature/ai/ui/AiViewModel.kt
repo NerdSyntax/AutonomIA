@@ -112,7 +112,7 @@ class AiViewModel(
 
     // API KEY
     // NO DEJAR LA KEY PUESTA AL SUBIR A GITHUB
-    private val groqApiKey = "PONER_API_KEY_AQUI".trim()
+    private val groqApiKey = "".trim()
 
     private var currentUid: String? = null
     private var nombreUsuario: String = "Usuario"
