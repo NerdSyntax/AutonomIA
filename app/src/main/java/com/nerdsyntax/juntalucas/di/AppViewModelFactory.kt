@@ -27,10 +27,10 @@ import com.nerdsyntax.juntalucas.feature.profile.ui.ProfileViewModel
 
 class AppViewModelFactory(
     private val authRepository: AuthRepository,
-    private val businessRepository: BusinessRepository
-    , private val salesRepository: SalesRepository = AppContainer.salesRepository
-    , private val catalogRepository: CatalogRepository = AppContainer.catalogRepository
-    , private val expensesRepository: ExpensesRepository = AppContainer.expensesRepository
+    private val businessRepository: BusinessRepository,
+    private val salesRepository: SalesRepository = AppContainer.salesRepository,
+    private val catalogRepository: CatalogRepository = AppContainer.catalogRepository,
+    private val expensesRepository: ExpensesRepository = AppContainer.expensesRepository
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when {

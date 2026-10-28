@@ -1,9 +1,13 @@
 package com.nerdsyntax.juntalucas.core.navigation
 
+
+
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.lifecycle.Lifecycle
@@ -31,6 +35,7 @@ import com.nerdsyntax.juntalucas.feature.auth.ui.welcome.*
 import com.nerdsyntax.juntalucas.feature.onboarding.ui.*
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.*
 import com.nerdsyntax.juntalucas.feature.movements.ui.*
+import com.nerdsyntax.juntalucas.feature.movements.domain.PaymentMethod
 import com.nerdsyntax.juntalucas.feature.business.ui.*
 import com.nerdsyntax.juntalucas.feature.business.ui.product.*
 import com.nerdsyntax.juntalucas.feature.ai.ui.*
@@ -101,13 +106,13 @@ fun AppNavigation() {
                     }
                 }
             }
-
             composable(Routes.WELCOME) {
                 WelcomeScreen(
                     onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
                     onNavigateToLogin = { navController.navigate(Routes.LOGIN) }
                 )
             }
+
 
             composable(Routes.LOGIN) {
                 val context = LocalContext.current
@@ -121,7 +126,6 @@ fun AppNavigation() {
                     onGoogleClick = { scope.launch { vm.loginWithGoogle { getGoogleIdToken(context) } } }
                 )
             }
-
             composable(Routes.REGISTER) {
                 val vm: RegisterViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -130,7 +134,6 @@ fun AppNavigation() {
                     vm::register, navController::popBackStack
                 )
             }
-
             composable(Routes.FORGOT_PASSWORD) {
                 val vm: ForgotPasswordViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
@@ -147,6 +150,7 @@ fun AppNavigation() {
                     onLogout = vm::logout
                 )
             }
+
 
             composable(Routes.BUSINESS_INFO) {
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
@@ -199,25 +203,42 @@ fun AppNavigation() {
                 )
             }
 
+
             composable(Routes.DASHBOARD) {
                 if (!session.canAccessDashboard) return@composable
+
                 val vm: DashboardViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                    vm.refresh()
+                }
 
                 DashboardScreen(
                     state = state,
                     onNavigateToAi = {
-                        navController.navigateToBottomRoute(Routes.AI)
+                        navController.navigate(Routes.AI) {
+                            launchSingleTop = true
+                        }
+
+                        navController.navigate(Routes.AI_CHAT) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToMonthlyAnalysis = {
+                        navController.navigate(Routes.AI_MONTHLY) {
+                            launchSingleTop = true
+                        }
                     },
                     onFilterSelected = vm::selectFilter,
                     onCustomStart = vm::onCustomStart,
                     onCustomEnd = vm::onCustomEnd,
                     onRetry = vm::refresh,
-                    onViewAll = { navController.navigateToBottomRoute(Routes.MOVEMENTS) }
+                    onViewAll = {
+                        navController.navigateToBottomRoute(Routes.MOVEMENTS)
+                    }
                 )
             }
-
             composable(Routes.MOVEMENTS) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: MovementsViewModel = viewModel(factory = factory)
@@ -234,7 +255,6 @@ fun AppNavigation() {
                     }
                 )
             }
-
             composable(Routes.ADD_SALE) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AddSaleViewModel = viewModel(factory = factory)
@@ -350,28 +370,87 @@ fun AppNavigation() {
                 )
             }
 
+            // --- BLOQUE DE INTELIGENCIA ARTIFICIAL ---
+
             composable(Routes.AI) {
                 if (!session.canAccessDashboard) return@composable
+
                 val vm: AiViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
 
                 AiScreen(
                     state = state,
-                    vm = vm
+                    vm = vm,
+                    onNavigateToAddSale = {
+                        navController.navigate(Routes.ADD_SALE)
+                    },
+                    onNavigateToLoading = {
+                        navController.navigate(Routes.AI_LOADING)
+                    },
+                    onNavigateToChat = {
+                        navController.navigate(Routes.AI_CHAT) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToMonthly = {
+                        navController.navigate(Routes.AI_MONTHLY) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+
+            composable(Routes.AI_LOADING) { navBackStackEntry ->
+                if (!session.canAccessDashboard) return@composable
+
+                // Obtenemos el MISMO ViewModel de la ruta Routes.AI
+                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.AI) }
+                val vm: AiViewModel = viewModel(parentEntry, factory = factory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+
+                AiLoadingScreen(
+                    state = state,
+                    vm = vm,
+                    onNavigateToChat = {
+                        // Navegamos al chat y eliminamos la pantalla de carga del historial
+                        // para que si el usuario presiona "Atrás", vuelva a la pantalla principal de AI.
+                        navController.navigate(Routes.AI_CHAT) {
+                            popUpTo(Routes.AI_LOADING) { inclusive = true }
+                        }
+                    },
+                    onCancel = { navController.popBackStack() }
                 )
             }
 
             composable(Routes.AI_CHAT) { navBackStackEntry ->
                 if (!session.canAccessDashboard) return@composable
 
-                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.AI) }
-                val vm: AiViewModel = viewModel(parentEntry, factory = factory)
+                val parentEntry = remember(navBackStackEntry) {
+                    navController.getBackStackEntry(Routes.AI)
+                }
+
+                val vm: AiViewModel = viewModel(
+                    viewModelStoreOwner = parentEntry,
+                    factory = factory
+                )
+
                 val state by vm.uiState.collectAsStateWithLifecycle()
 
                 AiChatScreen(
                     state = state,
                     vm = vm,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+            composable(Routes.AI_MONTHLY) {
+                if (!session.canAccessDashboard) return@composable
+
+                AiMonthlyScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
                 )
             }
 
@@ -386,22 +465,20 @@ fun AppNavigation() {
                     onNavigateToAccount = { navController.navigate(Routes.ACCOUNT) }
                 )
             }
-
             composable(Routes.ACCOUNT) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AccountViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 AccountScreen(
-                    state = state,
-                    onChangePassword = vm::sendPasswordReset,
-                    onLogout = vm::logout,
-                    onDeleteAccount = vm::deleteAccount,
-                    onBack = navController::popBackStack
+                    state, vm::sendPasswordReset, vm::logout, vm::deleteAccount,
+                    navController::popBackStack
                 )
             }
         }
     }
 }
+
+// --- ESTAS SON LAS FUNCIONES QUE FALTABAN PARA QUE NO DE ERROR ---
 
 private fun NavHostController.navigateAndClear(route: String) {
     navigate(route) {

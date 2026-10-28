@@ -1,30 +1,105 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.domain
 
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
-import java.util.TimeZone
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 
-enum class DashboardPeriodFilter(val label: String) { WEEK("Semana"), MONTH("Mes actual"), CUSTOM("Personalizado") }
-data class DashboardDateRange(val start: String, val endExclusive: String)
+enum class DashboardPeriodFilter(val label: String) {
+    WEEK("Semana"),
+    MONTH("Mes"),
+    YEAR("Año"),
+    CUSTOM("Personalizado")
+}
+
+data class DashboardDateRange(
+    val start: String,
+    val endExclusive: String
+)
 
 object DashboardPeriods {
-    private val zone = TimeZone.getTimeZone("America/Santiago")
-    private fun formatter() = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false; timeZone = zone }
-    fun today(): String = formatter().format(java.util.Date())
-    fun currentMonth(): String = today().take(7)
-    fun monthRange(): DashboardDateRange {
-        val start = "${currentMonth()}-01"; val calendar = Calendar.getInstance(zone); calendar.time = formatter().parse(start)!!; calendar.add(Calendar.MONTH, 1)
-        return DashboardDateRange(start, formatter().format(calendar.time))
+
+    private val zone = ZoneId.of("America/Santiago")
+
+    private fun currentDate(): LocalDate = LocalDate.now(zone)
+
+    fun today(): String = currentDate().toString()
+
+    fun currentMonth(): String =
+        YearMonth.from(currentDate()).toString()
+
+    fun currentYear(): Int = currentDate().year
+
+    // Sin argumento usa el mes actual.
+    // También permite consultar, por ejemplo, "2026-08".
+    fun monthRange(
+        month: String = currentMonth()
+    ): DashboardDateRange {
+        val selectedMonth = YearMonth.parse(month)
+
+        return DashboardDateRange(
+            start = selectedMonth.atDay(1).toString(),
+            endExclusive = selectedMonth
+                .plusMonths(1)
+                .atDay(1)
+                .toString()
+        )
     }
+
+    // Semana de lunes a domingo.
     fun weekRange(): DashboardDateRange {
-        val calendar = Calendar.getInstance(zone); calendar.time = formatter().parse(today())!!; calendar.firstDayOfWeek = Calendar.MONDAY; calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-        val start = formatter().format(calendar.time); calendar.add(Calendar.DAY_OF_MONTH, 7)
-        return DashboardDateRange(start, formatter().format(calendar.time))
+        val start = currentDate().with(
+            TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)
+        )
+
+        return DashboardDateRange(
+            start = start.toString(),
+            endExclusive = start.plusWeeks(1).toString()
+        )
     }
-    fun customRange(start: String, endInclusive: String): DashboardDateRange {
-        val calendar = Calendar.getInstance(zone); calendar.time = formatter().parse(endInclusive)!!; calendar.add(Calendar.DAY_OF_MONTH, 1)
-        return DashboardDateRange(start, formatter().format(calendar.time))
+
+    // Sin argumento usa el año actual.
+    fun yearRange(
+        year: Int = currentYear()
+    ): DashboardDateRange {
+        val start = LocalDate.of(year, 1, 1)
+
+        return DashboardDateRange(
+            start = start.toString(),
+            endExclusive = start.plusYears(1).toString()
+        )
     }
-    fun valid(date: String): Boolean = runCatching { date.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) && formatter().parse(date) != null }.getOrDefault(false)
+
+    // La fecha final que elige el usuario está incluida.
+    fun customRange(
+        start: String,
+        endInclusive: String
+    ): DashboardDateRange {
+        require(valid(start) && valid(endInclusive)) {
+            "Selecciona fechas válidas."
+        }
+
+        val firstDay = LocalDate.parse(start)
+        val lastDay = LocalDate.parse(endInclusive)
+
+        require(!lastDay.isBefore(firstDay)) {
+            "La fecha final no puede ser anterior a la inicial."
+        }
+
+        return DashboardDateRange(
+            start = firstDay.toString(),
+            endExclusive = lastDay.plusDays(1).toString()
+        )
+    }
+
+    fun valid(date: String): Boolean {
+        if (!date.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}"))) {
+            return false
+        }
+
+        return runCatching {
+            LocalDate.parse(date)
+        }.isSuccess
+    }
 }

@@ -29,6 +29,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -39,6 +40,15 @@ android {
 }
 
 dependencies {
+
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+
+
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+// Gráficos Vico para Jetpack Compose y Material 3
+    implementation("com.patrykandpatrick.vico:compose:3.3.1")
+    implementation("com.patrykandpatrick.vico:compose-m3:3.3.1")
 
     // Firebase
     implementation(platform(libs.firebase.bom))

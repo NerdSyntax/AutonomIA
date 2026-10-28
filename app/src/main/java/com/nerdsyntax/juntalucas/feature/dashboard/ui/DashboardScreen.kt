@@ -1,9 +1,7 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,593 +9,517 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.nerdsyntax.juntalucas.core.format.formatClp
+import java.text.NumberFormat
+import java.util.Locale
+import android.app.DatePickerDialog
+import androidx.compose.ui.platform.LocalContext
 import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
+import androidx.compose.runtime.*
 
-private val HeaderBlue = Color(0xFF0F2942)
-private val BgLight = Color(0xFFF8FAFC)
-private val CardWhite = Color(0xFFFFFFFF)
-private val TextPrimary = Color(0xFF0F172A)
-private val TextSecondary = Color(0xFF64748B)
-private val GreenIncome = Color(0xFF10B981)
-private val GreenLightBg = Color(0xFFD1FAE5)
-private val RedExpense = Color(0xFFEF4444)
-private val RedLightBg = Color(0xFFFEE2E2)
-private val AmberBalance = Color(0xFFF59E0B)
-private val PurpleBrand = Color(0xFF7C3AED)
-private val PurpleGradientEnd = Color(0xFF9333EA)
+private val DarkBlue = Color(0xFF0F2A4A)
+private val LightBg = Color(0xFFF8FAFC)
+private val GreenPos = Color(0xFF10B981)
+private val RedNeg = Color(0xFFEF4444)
+private val OrangeWarn = Color(0xFFF59E0B)
+private val PurpleAi = Color(0xFF8B5CF6)
 
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
-    onNavigateToAi: () -> Unit = {},
+    onNavigateToAi: () -> Unit,
+    onNavigateToMonthlyAnalysis: () -> Unit,
     onFilterSelected: (DashboardPeriodFilter) -> Unit = {},
     onCustomStart: (String) -> Unit = {},
     onCustomEnd: (String) -> Unit = {},
     onRetry: () -> Unit = {},
     onViewAll: () -> Unit = {}
 ) {
-    var nombreFirebase by remember { mutableStateOf("") }
-
-    LaunchedEffect(state.userName) {
-        if (state.userName.isBlank() || state.userName.equals("Usuario", ignoreCase = true)) {
-            val user = FirebaseAuth.getInstance().currentUser
-            val desdeAuth = user?.displayName?.takeIf { it.isNotBlank() }
-            if (desdeAuth != null) {
-                nombreFirebase = desdeAuth
-            } else if (user?.uid != null) {
-                FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(user.uid)
-                    .get()
-                    .addOnSuccessListener { doc ->
-                        val desdeDoc = listOf("name", "nombre", "firstName", "fullName", "displayName")
-                            .firstNotNullOfOrNull { campo -> doc.getString(campo)?.takeIf { it.isNotBlank() } }
-                        nombreFirebase = desdeDoc ?: user.email?.substringBefore("@") ?: "Usuario"
-                    }
-                    .addOnFailureListener {
-                        nombreFirebase = user.email?.substringBefore("@") ?: "Usuario"
-                    }
-            }
+    if (state.isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = DarkBlue)
         }
-    }
-
-    val nombreBase = if (state.userName.isNotBlank() && !state.userName.equals("Usuario", ignoreCase = true)) {
-        state.userName
-    } else {
-        nombreFirebase
-    }
-
-    val primerNombre = nombreBase
-        .trim()
-        .split(Regex("[\\s._0-9-]+"))
-        .firstOrNull { it.length >= 2 }
-        ?.lowercase()
-        ?.replaceFirstChar { it.uppercase() }
-        ?: "Usuario"
-
-    val margenCalculado = remember(state.margen, state.ventasTotales, state.balanceMovimientos) {
-        if (state.margen.isNotBlank() && state.margen != "—") {
-            state.margen
-        } else if (state.ventasTotales > 0L) {
-            "${((state.balanceMovimientos * 100) / state.ventasTotales)}%"
-        } else {
-            "—"
-        }
+        return
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgLight)
+            .background(LightBg)
             .verticalScroll(rememberScrollState())
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-                .background(HeaderBlue)
-                .padding(top = 44.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Hola, $primerNombre",
-                            color = Color.LightGray,
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = state.nombreNegocio.ifBlank { "Mi Negocio" },
-                            color = Color.White,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconButton(
-                            onClick = { onRetry() },
-                            modifier = Modifier
-                                .background(Color.White.copy(alpha = 0.1f), CircleShape)
-                                .size(40.dp)
-                        ) {
-                            Icon(Icons.Default.GridView, contentDescription = "Menú", tint = Color.White)
-                        }
-                        IconButton(
-                            onClick = { },
-                            modifier = Modifier
-                                .background(Color.White.copy(alpha = 0.1f), CircleShape)
-                                .size(40.dp)
-                        ) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Notificaciones", tint = Color.White)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(22.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    PeriodTabItem(
-                        label = "Semana",
-                        selected = state.selectedFilter == DashboardPeriodFilter.WEEK,
-                        onClick = { onFilterSelected(DashboardPeriodFilter.WEEK) }
-                    )
-                    PeriodTabItem(
-                        label = "Mes actual",
-                        selected = state.selectedFilter == DashboardPeriodFilter.MONTH,
-                        onClick = { onFilterSelected(DashboardPeriodFilter.MONTH) }
-                    )
-                    PeriodTabItem(
-                        label = "Personalizado",
-                        selected = state.selectedFilter == DashboardPeriodFilter.CUSTOM,
-                        onClick = { onFilterSelected(DashboardPeriodFilter.CUSTOM) }
-                    )
-                }
-
-                if (state.selectedFilter == DashboardPeriodFilter.CUSTOM) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = state.customStart,
-                            onValueChange = onCustomStart,
-                            label = { Text("Desde (YYYY-MM-DD)", fontSize = 11.sp, color = Color.LightGray) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color.White,
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.4f)
-                            )
-                        )
-                        OutlinedTextField(
-                            value = state.customEnd,
-                            onValueChange = onCustomEnd,
-                            label = { Text("Hasta (YYYY-MM-DD)", fontSize = 11.sp, color = Color.LightGray) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color.White,
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.4f)
-                            )
-                        )
-                    }
-                }
-            }
-        }
+        HeaderSection(
+            state = state,
+            onFilterSelected = onFilterSelected,
+            onCustomStart = onCustomStart,
+            onCustomEnd = onCustomEnd
+        )
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            MonthlyGoalCard(
-                alcanzado = state.ventasMesActual.takeIf { it > 0 } ?: state.ventasTotales,
-                meta = state.metaMensual
+            state.errorMessage?.let { message ->
+                Column {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    TextButton(onClick = onRetry) {
+                        Text("Reintentar")
+                    }
+                }
+            }
+
+            GoalSection(state)
+
+            KpiGridSection(state)
+
+            AiAccessSection(
+                onChatClick = onNavigateToAi,
+                onMonthlyClick = onNavigateToMonthlyAnalysis
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                MetricSummaryCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Ventas totales",
-                    value = formatClp(state.ventasTotales),
-                    valueColor = GreenIncome,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = null,
-                            tint = GreenIncome,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-                MetricSummaryCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Gastos totales",
-                    value = formatClp(state.gastosTotales),
-                    valueColor = RedExpense,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDownward,
-                            contentDescription = null,
-                            tint = RedExpense,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-            }
+            DashboardCharts(
+                state = state,
+                onRetry = onRetry
+            )
+            ExpenseDistributionCard(
+                categorias = state.distribucionGastos,
+                productos = state.ventasPorProducto,
+                isLoading = state.graficosCargando,
+                errorMessage = state.errorGraficos
+            )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                MetricSummaryCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Balance de movimientos",
-                    value = formatClp(state.balanceMovimientos),
-                    valueColor = AmberBalance,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Outlined.Schedule,
-                            contentDescription = null,
-                            tint = RedExpense,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                )
-                MetricSummaryCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Margen",
-                    value = margenCalculado,
-                    valueColor = AmberBalance,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                            contentDescription = null,
-                            tint = RedExpense,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-            }
-
-            AiBannerCard(onClick = onNavigateToAi)
-
-            RecentMovementsListCard(
+            RecentMovementsSection(
                 movimientos = state.movimientosRecientes,
-                onSeeAllClick = onViewAll
+                onViewAll = onViewAll
             )
 
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+@Composable
+private fun HeaderSection(state: DashboardUiState, onFilterSelected: (DashboardPeriodFilter) -> Unit, onCustomStart: (String) -> Unit, onCustomEnd: (String) -> Unit) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = DarkBlue,
+                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+            .padding(top = 48.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Hola, ${state.userName}", color = Color.LightGray, fontSize = 14.sp)
+                Text(state.nombreNegocio, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconButton(onClick = { }, modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape).size(40.dp)) {
+                    Icon(Icons.Default.GridView, contentDescription = "Menú", tint = Color.White)
+                }
+                IconButton(onClick = { }, modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape).size(40.dp)) {
+                    Icon(Icons.Default.Notifications, contentDescription = "Notificaciones", tint = Color.White)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            DashboardPeriodFilter.entries.forEach { period ->
+                val selected = state.selectedFilter == period
+                Box(modifier = Modifier.clickable { onFilterSelected(period) }.background(if (selected) Color.White.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Text(period.label, color = if (selected) Color.White else Color.Gray, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
+                }
+            }
+        }
+        if (state.selectedFilter == DashboardPeriodFilter.CUSTOM) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { pickDate(context, state.customStart, onCustomStart) }, modifier = Modifier.weight(1f)) { Text(state.customStart.ifBlank { "Desde" }) }
+                OutlinedButton(onClick = { pickDate(context, state.customEnd, onCustomEnd) }, modifier = Modifier.weight(1f)) { Text(state.customEnd.ifBlank { "Hasta" }) }
+            }
         }
     }
 }
 
 @Composable
-private fun PeriodTabItem(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = if (selected) Color.White.copy(alpha = 0.22f) else Color.Transparent,
-        modifier = Modifier.clickable { onClick() }
+private fun GoalSection(state: DashboardUiState) {
+    val progress = if (state.metaMensual > 0) {
+        (state.ventasMesActual.toDouble() / state.metaMensual).coerceIn(0.0, 1.0).toFloat()
+    } else 0f
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text(
-            text = label,
-            color = if (selected) Color.White else Color.LightGray.copy(alpha = 0.75f),
-            fontSize = 14.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Meta mensual de ventas", color = Color.Gray, fontSize = 14.sp)
+                Text(if (state.metaMensual > 0) "${(progress * 100).toInt()}%" else "Sin meta", color = DarkBlue, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                color = PurpleAi,
+                trackColor = Color(0xFFE2E8F0)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("${formatPesos(state.ventasMesActual)} alcanzados", color = Color.Gray, fontSize = 12.sp)
+                Text(if (state.metaMensual > 0) "Meta: ${formatPesos(state.metaMensual)}" else "Configúrala en Negocio", color = Color.LightGray, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun KpiGridSection(state: DashboardUiState) {
+    val verde = Color(0xFF15803D)
+    val rojo = Color(0xFFB91C1C)
+    val azul = Color(0xFF1D4ED8)
+    val morado = Color(0xFF6D28D9)
+    val ambar = Color(0xFF92400E)
+
+    var ayuda by remember {
+        mutableStateOf<Pair<String, String>?>(null)
+    }
+
+    val gananciaBruta = state.gananciaBruta
+
+    val textoGanancia = when {
+        state.isLoading -> "Cargando…"
+        state.errorMessage != null -> "No disponible"
+        gananciaBruta != null -> {
+            "$" + NumberFormat
+                .getIntegerInstance(Locale.forLanguageTag("es-CL"))
+                .format(gananciaBruta)
+        }
+        state.margen == "Sin ventas" -> "Sin ventas"
+        else -> "Faltan costos"
+    }
+
+    val colorGanancia = when {
+        gananciaBruta == null -> ambar
+        gananciaBruta < 0.0 -> rojo
+        else -> azul
+    }
+
+    val colorMargen = when {
+        !state.margen.trim().endsWith("%") -> ambar
+        state.margen.trim().startsWith("-") -> rojo
+        else -> morado
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Ventas totales",
+                amount = formatPesos(state.ventasTotales),
+                color = verde,
+                backgroundColor = Color(0xFFF0FDF4),
+                icon = Icons.Default.ArrowUpward
+            )
+
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Gastos totales",
+                amount = formatPesos(state.gastosTotales),
+                color = rojo,
+                backgroundColor = Color(0xFFFEF2F2),
+                icon = Icons.Default.ArrowDownward
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Ganancia bruta",
+                amount = textoGanancia,
+                color = colorGanancia,
+                backgroundColor = Color(0xFFEFF6FF),
+                icon = Icons.Default.Info,
+                onInfoClick = {
+                    ayuda = "Ganancia bruta" to
+                            "Ventas menos el costo histórico de los productos " +
+                            "o servicios vendidos. No descuenta otros gastos, " +
+                            "como arriendo o administración. Si una venta no " +
+                            "tiene su costo registrado, aparece «Faltan costos»."
+                }
+            )
+
+            KpiCard(
+                modifier = Modifier.weight(1f),
+                title = "Margen bruto",
+                amount = state.margen,
+                color = colorMargen,
+                backgroundColor = Color(0xFFF5F3FF),
+                icon = Icons.Default.Info,
+                onInfoClick = {
+                    ayuda = "Margen bruto" to
+                            "Es la ganancia bruta dividida entre las ventas, " +
+                            "multiplicada por 100. Un margen del 40 % significa " +
+                            "que quedan $40 por cada $100 vendidos, antes de " +
+                            "descontar otros gastos."
+                }
+            )
+        }
+    }
+
+    ayuda?.let { (titulo, mensaje) ->
+        AlertDialog(
+            onDismissRequest = { ayuda = null },
+            title = { Text(titulo) },
+            text = { Text(mensaje) },
+            confirmButton = {
+                TextButton(onClick = { ayuda = null }) {
+                    Text("Entendido")
+                }
+            }
         )
     }
 }
 
 @Composable
-private fun MonthlyGoalCard(
-    alcanzado: Long,
-    meta: Long
+private fun KpiCard(
+    modifier: Modifier,
+    title: String,
+    amount: String,
+    color: Color,
+    backgroundColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onInfoClick: (() -> Unit)? = null
 ) {
-    val porcentaje = if (meta > 0L) ((alcanzado.toFloat() / meta.toFloat()) * 100f).toInt().coerceIn(0, 100) else 0
-    val progresoAnimado by animateFloatAsState(
-        targetValue = if (meta > 0L) (alcanzado.toFloat() / meta.toFloat()).coerceIn(0f, 1f) else 0f,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "goalProgress"
-    )
-
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = CardWhite,
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor
+        )
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 112.dp)
+                .padding(
+                    start = 14.dp,
+                    end = 14.dp,
+                    top = 6.dp,
+                    bottom = 16.dp
+                )
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Meta mensual de ventas", color = TextSecondary, fontSize = 14.sp)
-                Text("$porcentaje%", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFE2E8F0))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progresoAnimado)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(50))
-                        .background(PurpleBrand)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("${formatClp(alcanzado)} alcanzados", color = TextSecondary, fontSize = 12.sp)
-                Text(
-                    text = if (meta > 0L) "Meta: ${formatClp(meta)}" else "Sin meta definida",
-                    color = TextSecondary.copy(alpha = 0.7f),
-                    fontSize = 12.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetricSummaryCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    valueColor: Color,
-    icon: @Composable () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = CardWhite,
-        shadowElevation = 2.dp,
-        modifier = modifier
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .heightIn(min = 48.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = title,
-                    color = TextSecondary,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFF475569),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Medium
                 )
-                icon()
+
+                if (onInfoClick != null) {
+                    IconButton(
+                        onClick = onInfoClick,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Información sobre $title",
+                            tint = color,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+
             Text(
-                text = value,
-                color = valueColor,
-                fontSize = 22.sp,
+                text = amount,
+                color = color,
+                fontSize = if (amount.any { it.isLetter() }) 14.sp else 20.sp,
+                lineHeight = 24.sp,
                 fontWeight = FontWeight.Bold
             )
         }
     }
 }
 
+
+
+
 @Composable
-private fun AiBannerCard(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(PurpleBrand, PurpleGradientEnd)
-                )
-            )
-            .clickable { onClick() }
-            .padding(horizontal = 18.dp, vertical = 18.dp)
+private fun AiAccessSection(
+    onChatClick: () -> Unit,
+    onMonthlyClick: () -> Unit
+) {
+    Surface(
+        onClick = onChatClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF6366F1),
+                            Color(0xFF9333EA)
+                        )
+                    )
+                )
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .background(
+                        color = Color.White.copy(alpha = 0.18f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column {
-                    Text(
-                        text = "Analizar mi negocio con IA",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Recibe hasta 3 recomendaciones",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 13.sp
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.ChatBubbleOutline,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Chat de mi negocio",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+
+                Text(
+                    text = "Conversa sobre los datos de tu negocio",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
                 tint = Color.White
             )
         }
     }
 }
-
 @Composable
-private fun RecentMovementsListCard(
-    movimientos: List<MovimientoUi>,
-    onSeeAllClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = CardWhite,
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
+private fun RecentMovementsSection(movimientos: List<MovimientoUi>, onViewAll: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Movimientos recientes",
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Ver todos",
-                    color = HeaderBlue,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { onSeeAllClick() }
-                )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Movimientos recientes", fontWeight = FontWeight.Bold, color = DarkBlue, fontSize = 16.sp)
+                Text("Ver todos", color = DarkBlue, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onViewAll))
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (movimientos.isEmpty()) {
-                Text(
-                    text = "Aún no hay movimientos registrados en este periodo.",
-                    color = TextSecondary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            } else {
-                movimientos.forEachIndexed { index, item ->
-                    val (_, titulo, fecha, montoTexto, esIngreso) = item
+                Text("Aún no tienes movimientos registrados.", color = Color.Gray, fontSize = 14.sp)
+            }
+            movimientos.forEach { mov ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val iconColor = if (mov.esIngreso) GreenPos else RedNeg
+                    val bgColor = if (mov.esIngreso) Color(0xFFD1FAE5) else Color(0xFFFEE2E2)
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(if (esIngreso) GreenLightBg else RedLightBg),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (esIngreso) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                                    contentDescription = null,
-                                    tint = if (esIngreso) GreenIncome else RedExpense,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = titulo,
-                                    color = TextPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = fecha,
-                                    color = TextSecondary,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = montoTexto,
-                            color = if (esIngreso) GreenIncome else RedExpense,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Box(modifier = Modifier.size(40.dp).background(bgColor, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(if (mov.esIngreso) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null, tint = iconColor)
                     }
-
-                    if (index < movimientos.lastIndex) {
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(mov.titulo, fontWeight = FontWeight.SemiBold, color = DarkBlue, fontSize = 14.sp)
+                        Text(mov.fecha, color = Color.Gray, fontSize = 12.sp)
                     }
+                    Text(mov.montoStr, fontWeight = FontWeight.Bold, color = iconColor)
                 }
+                if (mov != movimientos.last()) HorizontalDivider(color = Color(0xFFF1F5F9))
             }
         }
     }
+}
+
+private fun formatPesos(amount: Long): String = "$" + NumberFormat.getIntegerInstance(Locale.forLanguageTag("es-CL")).format(amount)
+
+private fun pickDate(context: android.content.Context, current: String, onSelected: (String) -> Unit) {
+    val valid = current.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}"))
+    val parts = if (valid) current.split("-").map(String::toInt) else null
+    val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("America/Santiago"))
+    DatePickerDialog(context, { _, year, month, day -> onSelected(String.format(Locale.ROOT, "%04d-%02d-%02d", year, month + 1, day)) },
+        parts?.get(0) ?: calendar.get(java.util.Calendar.YEAR), (parts?.get(1) ?: calendar.get(java.util.Calendar.MONTH) + 1) - 1,
+        parts?.get(2) ?: calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
 }
