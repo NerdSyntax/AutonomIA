@@ -30,9 +30,12 @@ class DashboardViewModel(
     private val expensesRepository: ExpensesRepository? = null
 ) : ViewModel() {
 
-    private val filter = MutableStateFlow(DashboardPeriodFilter.MONTH)
-    private val customStart = MutableStateFlow("")
-    private val customEnd = MutableStateFlow("")
+    private val locale = Locale.forLanguageTag("es-CL")
+
+    private val periodSelection = MutableStateFlow(
+        currentMonthSelection()
+    )
+
     private val retry = MutableStateFlow(0)
 
     private val _uiState = MutableStateFlow(
@@ -40,16 +43,22 @@ class DashboardViewModel(
     )
     val uiState = _uiState.asStateFlow()
 
-    private val locale = Locale.forLanguageTag("es-CL")
-
     init {
         viewModelScope.launch {
             authRepository.currentUser
                 .map { it?.uid }
                 .distinctUntilChanged()
                 .collectLatest { uid ->
+                    // Al cambiar de cuenta, reiniciamos también el periodo.
+                    val initialSelection = currentMonthSelection()
+                    periodSelection.value = initialSelection
+
                     _uiState.value = DashboardUiState(
                         userName = userName(),
+                        selectedFilter = initialSelection.filter,
+                        periodLabel = periodLabel(initialSelection),
+                        customStart = initialSelection.start,
+                        customEnd = initialSelection.end,
                         isLoading = uid != null,
                         graficosCargando = uid != null
                     )
@@ -65,12 +74,10 @@ class DashboardViewModel(
                     }
 
                     combine(
-                        filter,
-                        customStart,
-                        customEnd,
+                        periodSelection,
                         retry
-                    ) { selected, start, end, _ ->
-                        PeriodSelection(selected, start, end)
+                    ) { selection, _ ->
+                        selection
                     }.collectLatest { selection ->
                         loadPeriod(uid, selection)
                     }
@@ -83,17 +90,115 @@ class DashboardViewModel(
     }
 
     fun selectFilter(value: DashboardPeriodFilter) {
-        filter.value = value
+        val current = periodSelection.value
+
+        val anchor = runCatching {
+            LocalDate.parse(current.start)
+        }.getOrElse {
+            LocalDate.parse(DashboardPeriods.today())
+        }
+
+        if (value == DashboardPeriodFilter.CUSTOM) {
+            applyPeriod(
+                selected = value,
+                start = current.start,
+                end = current.end
+            )
+        } else {
+            applyPeriod(
+                selected = value,
+                start = anchor.toString(),
+                end = anchor.toString()
+            )
+        }
     }
 
+    /**
+     * Aplica el filtro y sus fechas en una sola actualización.
+     * start y end usan formato yyyy-MM-dd.
+     * end es inclusivo: ese día también se consulta.
+     */
+    fun applyPeriod(
+        selected: DashboardPeriodFilter,
+        start: String,
+        end: String
+    ) {
+        val normalized = runCatching {
+            val anchor = LocalDate.parse(start)
+
+            val first = when (selected) {
+                DashboardPeriodFilter.WEEK ->
+                    anchor.minusDays(
+                        (anchor.dayOfWeek.value - 1).toLong()
+                    )
+
+                DashboardPeriodFilter.MONTH ->
+                    anchor.withDayOfMonth(1)
+
+                DashboardPeriodFilter.YEAR ->
+                    anchor.withDayOfYear(1)
+
+                DashboardPeriodFilter.CUSTOM -> anchor
+            }
+
+            val last = when (selected) {
+                DashboardPeriodFilter.WEEK ->
+                    first.plusDays(6)
+
+                DashboardPeriodFilter.MONTH ->
+                    first.plusMonths(1).minusDays(1)
+
+                DashboardPeriodFilter.YEAR ->
+                    first.plusYears(1).minusDays(1)
+
+                DashboardPeriodFilter.CUSTOM ->
+                    LocalDate.parse(end)
+            }
+
+            require(!last.isBefore(first))
+
+            PeriodSelection(
+                filter = selected,
+                start = first.toString(),
+                end = last.toString()
+            )
+        }.getOrNull()
+
+        if (normalized == null) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Selecciona un rango de fechas válido."
+                )
+            }
+            return
+        }
+
+        periodSelection.value = normalized
+    }
+
+    // Conservados para que las referencias antiguas sigan compilando.
+    // El diálogo nuevo confirma las dos fechas mediante applyPeriod.
     fun onCustomStart(value: String) {
-        customStart.value = value
-        _uiState.update { it.copy(customStart = value) }
+        _uiState.update {
+            it.copy(customStart = value)
+        }
     }
 
     fun onCustomEnd(value: String) {
-        customEnd.value = value
-        _uiState.update { it.copy(customEnd = value) }
+        _uiState.update {
+            it.copy(customEnd = value)
+        }
+    }
+
+    private fun currentMonthSelection(): PeriodSelection {
+        val today = LocalDate.parse(DashboardPeriods.today())
+        val first = today.withDayOfMonth(1)
+
+        return PeriodSelection(
+            filter = DashboardPeriodFilter.MONTH,
+            start = first.toString(),
+            end = first.plusMonths(1).minusDays(1).toString()
+        )
     }
 
     private fun userName(): String {
@@ -106,56 +211,64 @@ class DashboardViewModel(
     private fun resolveRange(
         selection: PeriodSelection
     ): DashboardDateRange? {
-        return when (selection.filter) {
-            DashboardPeriodFilter.WEEK ->
-                DashboardPeriods.weekRange()
+        return runCatching {
+            val start = LocalDate.parse(selection.start)
+            val end = LocalDate.parse(selection.end)
 
-            DashboardPeriodFilter.MONTH ->
-                DashboardPeriods.monthRange()
+            require(!end.isBefore(start))
 
-            DashboardPeriodFilter.YEAR ->
-                DashboardPeriods.yearRange()
-
-            DashboardPeriodFilter.CUSTOM -> {
-                if (
-                    DashboardPeriods.valid(selection.start) &&
-                    DashboardPeriods.valid(selection.end) &&
-                    selection.start <= selection.end
-                ) {
-                    DashboardPeriods.customRange(
-                        selection.start,
-                        selection.end
-                    )
-                } else {
-                    null
-                }
-            }
-        }
+            DashboardDateRange(
+                start = start.toString(),
+                endExclusive = end.plusDays(1).toString()
+            )
+        }.getOrNull()
     }
 
     private fun periodLabel(selection: PeriodSelection): String {
+        val range = resolveRange(selection)
+            ?: return "Elegir fechas"
+
+        val start = LocalDate.parse(range.start)
+        val end = LocalDate.parse(range.endExclusive).minusDays(1)
+
         return when (selection.filter) {
-            DashboardPeriodFilter.WEEK -> "Semana actual"
-            DashboardPeriodFilter.MONTH -> "Mes actual"
-            DashboardPeriodFilter.YEAR -> "Año actual"
+            DashboardPeriodFilter.WEEK -> {
+                if (start.year == end.year && start.month == end.month) {
+                    val format = DateTimeFormatter.ofPattern(
+                        "MMM yy",
+                        locale
+                    )
+
+                    "${start.dayOfMonth}–${end.dayOfMonth} " +
+                            end.format(format).replace(".", "")
+                } else {
+                    val format = DateTimeFormatter.ofPattern(
+                        "d/M/yy",
+                        locale
+                    )
+
+                    "${start.format(format)}–${end.format(format)}"
+                }
+            }
+
+            DashboardPeriodFilter.MONTH -> {
+                start.format(
+                    DateTimeFormatter.ofPattern("MMM yyyy", locale)
+                )
+                    .replace(".", "")
+                    .replaceFirstChar { it.uppercase(locale) }
+            }
+
+            DashboardPeriodFilter.YEAR ->
+                start.year.toString()
 
             DashboardPeriodFilter.CUSTOM -> {
-                if (
-                    DashboardPeriods.valid(selection.start) &&
-                    DashboardPeriods.valid(selection.end)
-                ) {
-                    val formatter = DateTimeFormatter.ofPattern(
-                        "dd/MM/yyyy"
-                    )
-                    val start = LocalDate.parse(selection.start)
-                        .format(formatter)
-                    val end = LocalDate.parse(selection.end)
-                        .format(formatter)
+                val format = DateTimeFormatter.ofPattern(
+                    "d/M/yy",
+                    locale
+                )
 
-                    "$start – $end"
-                } else {
-                    "Personalizado"
-                }
+                "${start.format(format)}–${end.format(format)}"
             }
         }
     }
@@ -171,6 +284,7 @@ class DashboardViewModel(
                 customStart = selection.start,
                 customEnd = selection.end,
                 ventasTotales = 0L,
+                ventasMesActual = 0L,
                 gastosTotales = 0L,
                 ganancia = 0L,
                 gananciaBruta = null,
@@ -179,6 +293,7 @@ class DashboardViewModel(
                 movimientosRecientes = emptyList(),
                 mesesGrafico = emptyList(),
                 distribucionGastos = emptyList(),
+                ventasPorProducto = emptyList(),
                 errorMessage = null,
                 errorGraficos = null,
                 isLoading = true,
@@ -223,9 +338,11 @@ class DashboardViewModel(
                 )
             }
 
+            // La meta mensual sigue correspondiendo al mes actual.
             val currentMonthRange = DashboardPeriods.monthRange()
 
-            // Las tarjetas y los gráficos usan el mismo periodo.
+            // Indicadores, gráficos y distribuciones:
+            // todos consultan el periodo seleccionado.
             val periodData = combine(
                 salesSource.observeRange(
                     uid,
@@ -307,6 +424,7 @@ class DashboardViewModel(
                 errorMessage = message,
                 errorGraficos = message,
                 ventasTotales = 0L,
+                ventasMesActual = 0L,
                 gastosTotales = 0L,
                 ganancia = 0L,
                 gananciaBruta = null,
@@ -314,7 +432,8 @@ class DashboardViewModel(
                 margen = "No disponible",
                 movimientosRecientes = emptyList(),
                 mesesGrafico = emptyList(),
-                distribucionGastos = emptyList()
+                distribucionGastos = emptyList(),
+                ventasPorProducto = emptyList()
             )
         }
     }
@@ -325,6 +444,7 @@ class DashboardViewModel(
         }
 
         val total = sales.sumOf { it.draft.total }
+
         val costs = sales.sumOf {
             requireNotNull(it.unitCost).toDouble() *
                     it.draft.quantity.toDouble()
@@ -336,8 +456,6 @@ class DashboardViewModel(
     private fun buildExpenseDistribution(
         expenses: List<Expense>
     ): List<GastoCategoriaUi> {
-        // Agrupa por la categoría registrada.
-        // Unifica espacios y diferencias de mayúsculas.
         val groups = expenses.groupBy { expense ->
             expense.draft.category
                 .trim()
@@ -355,7 +473,9 @@ class DashboardViewModel(
 
             GastoCategoriaUi(
                 categoria = categoryName,
-                monto = categoryExpenses.sumOf { it.draft.amount }
+                monto = categoryExpenses.sumOf {
+                    it.draft.amount
+                }
             )
         }.sortedWith(
             compareByDescending<GastoCategoriaUi> { it.monto }
@@ -437,10 +557,10 @@ class DashboardViewModel(
         )
 
         val expenseDistribution = buildExpenseDistribution(expenses)
+
         val productDistribution = sales
             .groupBy { it.draft.productId }
             .map { (productId, productSales) ->
-                // Usa el nombre de la venta más reciente del periodo.
                 val latestSale = productSales.maxWithOrNull(
                     compareBy<Sale> { it.draft.saleDate }
                         .thenBy { it.createdAtMillis }
@@ -456,23 +576,26 @@ class DashboardViewModel(
                 compareByDescending<VentaProductoUi> { it.monto }
                     .thenBy { it.nombre }
             )
+
         _uiState.update {
             it.copy(
                 userName = userName(),
                 nombreNegocio = business?.nombreNegocio.orEmpty(),
                 metaMensual = business?.metaMensual ?: 0L,
                 ventasTotales = salesTotal,
-                ventasMesActual = monthlySales.sumOf { sale ->
-                    sale.draft.total
+                ventasMesActual = monthlySales.sumOf {
+                        sale -> sale.draft.total
                 },
                 gastosTotales = expensesTotal,
 
-                // Compatibilidad con los campos anteriores.
+                // Campos antiguos: representan ventas menos gastos.
                 ganancia = balance,
                 balanceMovimientos = balance,
 
+                // Ganancia bruta: usa el costo histórico vendido.
                 gananciaBruta = grossProfit,
                 margen = margin,
+
                 movimientosRecientes = recent,
                 selectedFilter = selection.filter,
                 periodLabel = periodLabel(selection),
@@ -513,7 +636,11 @@ class DashboardViewModel(
                             )
 
         fun key(date: String): String {
-            return if (groupByMonth) date.take(7) else date
+            return if (groupByMonth) {
+                date.take(7)
+            } else {
+                date
+            }
         }
 
         val salesByPeriod = sales.groupBy {
@@ -528,7 +655,9 @@ class DashboardViewModel(
 
         if (groupByMonth) {
             var month = YearMonth.from(start)
-            val lastMonth = YearMonth.from(endExclusive.minusDays(1))
+            val lastMonth = YearMonth.from(
+                endExclusive.minusDays(1)
+            )
 
             while (!month.isAfter(lastMonth)) {
                 periods.add(month.toString())
@@ -560,7 +689,7 @@ class DashboardViewModel(
                 YearMonth.parse(period)
                     .format(monthFormatter)
                     .replace(".", "")
-                    .replaceFirstChar { it.uppercase() }
+                    .replaceFirstChar { it.uppercase(locale) }
             } else {
                 LocalDate.parse(period).format(dayFormatter)
             }

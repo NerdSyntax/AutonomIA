@@ -230,6 +230,7 @@ fun AppNavigation() {
                             launchSingleTop = true
                         }
                     },
+                    onPeriodApplied = vm::applyPeriod,
                     onFilterSelected = vm::selectFilter,
                     onCustomStart = vm::onCustomStart,
                     onCustomEnd = vm::onCustomEnd,

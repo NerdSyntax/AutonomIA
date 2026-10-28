@@ -1,4 +1,4 @@
-package com.nerdsyntax.juntalucas.feature.dashboard.ui
+package com.nerdsyntax.juntalucas.feature.dashboard.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,6 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.DashboardUiState
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.MesGraficoUi
 import com.patrykandpatrick.vico.compose.cartesian.*
 import com.patrykandpatrick.vico.compose.cartesian.axis.*
 import com.patrykandpatrick.vico.compose.cartesian.data.*

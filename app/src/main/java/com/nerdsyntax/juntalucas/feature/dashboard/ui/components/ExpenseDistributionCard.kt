@@ -1,4 +1,4 @@
-package com.nerdsyntax.juntalucas.feature.dashboard.ui
+package com.nerdsyntax.juntalucas.feature.dashboard.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nerdsyntax.juntalucas.core.format.formatClp
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.GastoCategoriaUi
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.VentaProductoUi
 import java.text.NumberFormat
 import java.util.Locale
 
