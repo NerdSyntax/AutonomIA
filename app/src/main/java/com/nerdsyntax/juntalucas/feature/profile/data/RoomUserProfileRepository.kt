@@ -1,9 +1,12 @@
 package com.nerdsyntax.juntalucas.feature.profile.data
 
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.nerdsyntax.juntalucas.feature.profile.domain.UserProfile
 import com.nerdsyntax.juntalucas.feature.profile.domain.UserProfileRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
 
 class RoomUserProfileRepository(
     private val userProfileDao: UserProfileDao
@@ -33,6 +36,20 @@ class RoomUserProfileRepository(
         userProfileDao.upsert(
             profile.toEntity()
         )
+        runCatching {
+            val datos = mapOf(
+                "userId" to profile.userId,
+                "displayName" to profile.displayName,
+                "name" to profile.displayName,
+                "nombre" to profile.displayName,
+                "onboardingCompleted" to profile.onboardingCompleted
+            )
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(profile.userId)
+                .set(datos, SetOptions.merge())
+                .await()
+        }
     }
 
     override suspend fun setOnboardingCompleted(
@@ -43,6 +60,13 @@ class RoomUserProfileRepository(
             userId = userId,
             completed = completed
         )
+        runCatching {
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(userId)
+                .set(mapOf("onboardingCompleted" to completed), SetOptions.merge())
+                .await()
+        }
     }
 
     override suspend fun deleteProfile(

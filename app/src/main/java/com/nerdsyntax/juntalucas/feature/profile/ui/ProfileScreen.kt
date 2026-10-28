@@ -1,5 +1,6 @@
 package com.nerdsyntax.juntalucas.feature.profile.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,17 +8,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -25,7 +29,6 @@ private val DarkBlue = Color(0xFF0F2A4A)
 private val LightGrayBg = Color(0xFFF8FAFC)
 private val SectionTextGray = Color(0xFF94A3B8)
 private val DividerColor = Color(0xFFF1F5F9)
-private val PurpleBadge = Color(0xFF8B5CF6)
 private val RedLogout = Color(0xFFDC2626)
 
 @Composable
@@ -34,6 +37,40 @@ fun ProfileScreen(
     vm: ProfileViewModel,
     onNavigateToAccount: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
+    LaunchedEffect(state.statusMessage) {
+        state.statusMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            vm.clearStatusMessage()
+        }
+    }
+
+    if (state.isEditingUser) {
+        EditUserDialog(
+            name = state.editNameInput,
+            email = state.email,
+            isSaving = state.isSaving,
+            onNameChange = vm::onEditNameChange,
+            onDismiss = vm::cerrarEditarUsuario,
+            onSave = vm::guardarDatosUsuario
+        )
+    }
+
+    if (state.isEditingBusiness) {
+        EditBusinessDialog(
+            businessName = state.editBusinessNameInput,
+            rubro = state.editRubroInput,
+            metaMensual = state.editMetaInput,
+            isSaving = state.isSaving,
+            onBusinessNameChange = vm::onEditBusinessNameChange,
+            onRubroChange = vm::onEditRubroChange,
+            onMetaChange = vm::onEditMetaChange,
+            onDismiss = vm::cerrarEditarNegocio,
+            onSave = vm::guardarDatosNegocio
+        )
+    }
+
     val rawInitials = state.name.split(" ")
         .mapNotNull { it.firstOrNull()?.toString() }
         .take(2)
@@ -70,18 +107,6 @@ fun ProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(initials, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = (-4).dp, y = (-4).dp)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(PurpleBadge),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                        }
                     }
 
                     Spacer(modifier = Modifier.width(16.dp))
@@ -95,20 +120,52 @@ fun ProfileScreen(
                     Surface(
                         color = Color.White.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.clickable { }
+                        modifier = Modifier.clickable { vm.abrirEditarUsuario() }
                     ) {
-                        Text("Editar", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        Text(
+                            text = "Editar",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
                     }
                 }
             }
         }
 
         SectionHeader("MI NEGOCIO")
-        ProfileListItem(icon = Icons.Default.Store, iconTint = Color(0xFFEF4444), title = "Nombre del negocio", value = state.businessName)
-        ProfileListItem(icon = Icons.Default.Folder, iconTint = Color(0xFFF59E0B), title = "Rubro", value = state.rubro)
-        ProfileListItem(icon = Icons.Default.TrackChanges, iconTint = Color(0xFFEC4899), title = "Meta mensual", value = state.metaMensual)
-        ProfileListItem(icon = Icons.Default.Payments, iconTint = Color(0xFF10B981), title = "Moneda", value = state.moneda)
-        ProfileListItem(icon = Icons.Default.Edit, iconTint = Color(0xFFF97316), title = "Editar información del negocio", showArrow = true)
+        ProfileListItem(
+            icon = Icons.Default.Store,
+            iconTint = Color(0xFFEF4444),
+            title = "Nombre del negocio",
+            value = state.businessName,
+        )
+        ProfileListItem(
+            icon = Icons.Default.Folder,
+            iconTint = Color(0xFFF59E0B),
+            title = "Rubro",
+            value = state.rubro,
+        )
+        ProfileListItem(
+            icon = Icons.Default.TrackChanges,
+            iconTint = Color(0xFFEC4899),
+            title = "Meta mensual",
+            value = state.metaMensual,
+        )
+        ProfileListItem(
+            icon = Icons.Default.Payments,
+            iconTint = Color(0xFF10B981),
+            title = "Moneda",
+            value = state.moneda
+        )
+        ProfileListItem(
+            icon = Icons.Default.Edit,
+            iconTint = Color(0xFFF97316),
+            title = "Editar información del negocio",
+            showArrow = true,
+            onClick = vm::abrirEditarNegocio
+        )
 
         SectionHeader("CONFIGURACIÓN")
         ProfileListItem(icon = Icons.Default.LocalOffer, iconTint = Color(0xFFF59E0B), title = "Categorías de gastos", showArrow = true)
@@ -117,7 +174,7 @@ fun ProfileScreen(
         ProfileListItem(icon = Icons.Default.Lock, iconTint = Color(0xFFF59E0B), title = "Biometría", switchState = state.biometriaEnabled, onSwitchChange = vm::onBiometriaChange)
 
         SectionHeader("PRIVACIDAD Y SEGURIDAD")
-        ProfileListItem(icon = Icons.Default.VpnKey, iconTint = Color(0xFFF59E0B), title = "Cambiar contraseña", showArrow = true, onClick = onNavigateToAccount)
+        ProfileListItem(icon = Icons.Default.VpnKey, iconTint = Color(0xFFF59E0B), title = "Cuenta", showArrow = true, onClick = onNavigateToAccount)
         ProfileListItem(icon = Icons.Default.Security, iconTint = Color(0xFF3B82F6), title = "Privacidad y datos", showArrow = true)
         ProfileListItem(icon = Icons.Default.Devices, iconTint = Color(0xFF8B5CF6), title = "Sesiones activas", showArrow = true)
 
@@ -144,6 +201,164 @@ fun ProfileScreen(
         }
         Spacer(modifier = Modifier.height(100.dp))
     }
+}
+
+@Composable
+private fun EditUserDialog(
+    name: String,
+    email: String,
+    isSaving: Boolean,
+    onNameChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "Editar perfil de usuario",
+                color = DarkBlue,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    label = { Text("Tu nombre") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {},
+                    label = { Text("Correo electrónico") },
+                    singleLine = true,
+                    enabled = false,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSaving
+            ) {
+                Text("Cancelar", color = SectionTextGray)
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onSave,
+                enabled = !isSaving,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DarkBlue)
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Guardar", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun EditBusinessDialog(
+    businessName: String,
+    rubro: String,
+    metaMensual: String,
+    isSaving: Boolean,
+    onBusinessNameChange: (String) -> Unit,
+    onRubroChange: (String) -> Unit,
+    onMetaChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "Editar información del negocio",
+                color = DarkBlue,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                OutlinedTextField(
+                    value = businessName,
+                    onValueChange = onBusinessNameChange,
+                    label = { Text("Nombre del negocio") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = rubro,
+                    onValueChange = onRubroChange,
+                    label = { Text("Rubro") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = metaMensual,
+                    onValueChange = onMetaChange,
+                    label = { Text("Meta mensual (CLP)") },
+                    prefix = { Text("$") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSaving
+            ) {
+                Text("Cancelar", color = SectionTextGray)
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onSave,
+                enabled = !isSaving,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DarkBlue)
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Guardar cambios", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    )
 }
 
 @Composable

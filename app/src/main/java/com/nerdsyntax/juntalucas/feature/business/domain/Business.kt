@@ -8,5 +8,7 @@ data class Business(
     val metaMensual: Long = 0,
     val tipoActividad: String = "",
     val puntoPartida: String = "manual",
-    val onboardingCompleted: Boolean = false
+    val onboardingCompleted: Boolean = false,
+    val nombreDueno: String = "",
+    val photoBase64: String = ""
 )

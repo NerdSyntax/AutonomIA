@@ -2,6 +2,7 @@ package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestore
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
@@ -12,6 +13,7 @@ import com.nerdsyntax.juntalucas.feature.movements.domain.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class DashboardViewModel(
     private val authRepository: AuthRepository,
@@ -27,6 +29,7 @@ class DashboardViewModel(
     val uiState = _uiState.asStateFlow()
 
     private var business: Business? = null
+    private var resolvedFirstName: String = "Usuario"
     private var sales = emptyList<Sale>()
     private var monthlySales = emptyList<Sale>()
     private var expenses = emptyList<Expense>()
@@ -40,7 +43,8 @@ class DashboardViewModel(
             authRepository.currentUser.map { it?.uid }.distinctUntilChanged().collectLatest { uid ->
                 business = null; sales = emptyList(); monthlySales = emptyList(); expenses = emptyList(); error = null; fromCache = false
                 loading = uid != null
-                _uiState.value = DashboardUiState(userName = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: "Usuario", isLoading = loading)
+                resolvedFirstName = resolveUserFirstName(uid)
+                _uiState.value = DashboardUiState(userName = resolvedFirstName, isLoading = loading)
                 if (uid == null) { _uiState.value = DashboardUiState(errorMessage = "Inicia sesión para ver tu negocio."); return@collectLatest }
                 loadBusiness(uid)
                 combine(filter, customStart, customEnd, retry) { selected, start, end, _ -> selected to (start to end) }
@@ -53,6 +57,34 @@ class DashboardViewModel(
     fun selectFilter(value: DashboardPeriodFilter) { filter.value = value; if (value != DashboardPeriodFilter.CUSTOM) refresh() }
     fun onCustomStart(value: String) { customStart.value = value; _uiState.update { it.copy(customStart = value) } }
     fun onCustomEnd(value: String) { customEnd.value = value; _uiState.update { it.copy(customEnd = value) } }
+
+    private suspend fun resolveUserFirstName(uid: String?): String {
+        val currentUser = authRepository.currentUser.value
+        val fromDisplayName = extractFirstName(currentUser?.displayName)
+        if (fromDisplayName != null) return fromDisplayName
+
+        if (uid != null) {
+            val firestoreName = runCatching {
+                val db = FirebaseFirestore.getInstance()
+                val doc = db.collection("users").document(uid).get().await()
+                listOf("name", "nombre", "firstName", "fullName", "displayName", "userName")
+                    .firstNotNullOfOrNull { field -> extractFirstName(doc.getString(field)) }
+            }.getOrNull()
+            if (firestoreName != null) return firestoreName
+        }
+
+        val fromEmail = extractFirstName(currentUser?.email?.substringBefore("@"))
+        return fromEmail ?: "Usuario"
+    }
+
+    private fun extractFirstName(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val clean = raw.trim()
+            .split(Regex("[\\s._0-9-]+"))
+            .firstOrNull { it.length >= 2 }
+            ?: return null
+        return clean.lowercase().replaceFirstChar { it.uppercase() }
+    }
 
     private suspend fun loadBusiness(uid: String) {
         businessRepository.getBusiness().fold({ business = it }, { error = it.salesUserMessage() })
@@ -70,20 +102,26 @@ class DashboardViewModel(
         val salesSource = salesRepository; val expensesSource = expensesRepository
         if (salesSource == null || expensesSource == null) { loading = false; render(); return }
         coroutineScope {
-            launch { salesSource.observeRange(uid, range.start, range.endExclusive).collect { result ->
-                pendingLoads = (pendingLoads - 1).coerceAtLeast(0); loading = pendingLoads > 0
-                result.fold({ data -> sales = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
-                render()
-            } }
-            launch { expensesSource.observeRange(uid, range.start, range.endExclusive).collect { result ->
-                pendingLoads = (pendingLoads - 1).coerceAtLeast(0); loading = pendingLoads > 0
-                result.fold({ data -> expenses = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
-                render()
-            } }
-            launch { salesSource.observeRange(uid, "${DashboardPeriods.currentMonth()}-01", DashboardPeriods.monthRange().endExclusive).collect { result ->
-                result.fold({ data -> monthlySales = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
-                render()
-            } }
+            launch {
+                salesSource.observeRange(uid, range.start, range.endExclusive).collect { result ->
+                    pendingLoads = (pendingLoads - 1).coerceAtLeast(0); loading = pendingLoads > 0
+                    result.fold({ data -> sales = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
+                    render()
+                }
+            }
+            launch {
+                expensesSource.observeRange(uid, range.start, range.endExclusive).collect { result ->
+                    pendingLoads = (pendingLoads - 1).coerceAtLeast(0); loading = pendingLoads > 0
+                    result.fold({ data -> expenses = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
+                    render()
+                }
+            }
+            launch {
+                salesSource.observeRange(uid, "${DashboardPeriods.currentMonth()}-01", DashboardPeriods.monthRange().endExclusive).collect { result ->
+                    result.fold({ data -> monthlySales = data.value; fromCache = fromCache || data.fromCache }, { error = it.salesUserMessage() })
+                    render()
+                }
+            }
         }
     }
 
@@ -93,6 +131,8 @@ class DashboardViewModel(
         val salesTotal = sales.fold(0L) { total, item -> runCatching { Math.addExact(total, item.draft.total) }.getOrElse { total } }
         val expensesTotal = expenses.fold(0L) { total, item -> runCatching { Math.addExact(total, item.draft.amount) }.getOrElse { total } }
         val balance = salesTotal - expensesTotal
+        val marginText = if (salesTotal > 0L) "${((balance * 100) / salesTotal)}%" else "—"
+
         val recent = (sales.map { MovementRow(it.draft.saleDate, it.createdAtMillis, it.draft.id, it.productName, "+${formatClp(it.draft.total)}", true) } +
                 expenses.map { MovementRow(it.draft.expenseDate, it.createdAtMillis, it.draft.id, it.draft.description, "-${formatClp(it.draft.amount)}", false) })
             .sortedWith(compareByDescending<MovementRow> { it.date }.thenByDescending { it.createdAt }.thenBy { it.id }).take(5)
@@ -100,7 +140,7 @@ class DashboardViewModel(
         val monthlyGoal = business?.metaMensual ?: 0L
         val monthSales = monthlySales.sumOf { it.draft.total }
         _uiState.value = _uiState.value.copy(
-            userName = authRepository.currentUser.value?.displayName?.takeIf { it.isNotBlank() } ?: "Usuario",
+            userName = resolvedFirstName,
             nombreNegocio = business?.nombreNegocio.orEmpty(),
             metaMensual = monthlyGoal,
             ventasTotales = salesTotal,
@@ -108,7 +148,7 @@ class DashboardViewModel(
             gastosTotales = expensesTotal,
             ganancia = balance,
             balanceMovimientos = balance,
-            margen = "—",
+            margen = marginText,
             movimientosRecientes = recent,
             selectedFilter = selected,
             periodLabel = rangeLabel,
