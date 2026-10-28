@@ -52,24 +52,78 @@ class BusinessViewModel(
         }
     }
 
-    fun onTabSelected(tab: BusinessTab) { _uiState.update { it.copy(selectedTab = tab) } }
+    fun onTabSelected(tab: BusinessTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
+        if (tab == BusinessTab.INFORMACION && !_uiState.value.isEditingBusiness) refreshBusiness()
+    }
     fun onSearchChange(query: String) { _uiState.update { it.copy(searchQuery = query) }; render() }
     fun onFilterSelected(filter: String) { _uiState.update { it.copy(selectedFilter = filter) }; render() }
     fun retry() { retry.value += 1 }
     fun startEditingBusiness() { _uiState.update { it.copy(isEditingBusiness = true, errorMessage = null) } }
-    fun cancelEditingBusiness() { render() }
+
+    fun cancelEditingBusiness() {
+        _uiState.update { it.copy(isEditingBusiness = false, errorMessage = null) }
+        render()
+    }
+
     fun onBusinessNameChange(value: String) { _uiState.update { it.copy(businessName = value) } }
     fun onBusinessRubroChange(value: String) { _uiState.update { it.copy(rubro = value) } }
     fun onBusinessRegionChange(value: String) { _uiState.update { it.copy(region = value) } }
     fun onBusinessComunaChange(value: String) { _uiState.update { it.copy(comuna = value) } }
+    fun onBusinessMetaChange(value: String) { _uiState.update { it.copy(metaMensual = value.filter { c -> c.isDigit() }.take(12)) } }
+
     fun saveBusiness() {
-        val current = business ?: return
         val state = _uiState.value
+        if (state.isSavingBusiness) return
+
+        val nombre = state.businessName.trim()
+        val meta = state.metaMensual.filter { it.isDigit() }.toLongOrNull() ?: 0L
+        if (nombre.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Ingresa el nombre de tu negocio.") }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isSavingBusiness = true, errorMessage = null) }
-            businessRepository.saveBusiness(current.copy(nombreNegocio = state.businessName.trim(), rubro = state.rubro.trim(), region = state.region.trim(), comuna = state.comuna.trim()))
-                .fold({ business = current.copy(nombreNegocio = state.businessName.trim(), rubro = state.rubro.trim(), region = state.region.trim(), comuna = state.comuna.trim()); _uiState.update { it.copy(isSavingBusiness = false, isEditingBusiness = false) }; render() },
-                    { error -> _uiState.update { it.copy(isSavingBusiness = false, errorMessage = error.salesUserMessage()) } })
+
+            val base = businessRepository.getBusiness().getOrNull() ?: business
+            if (base == null) {
+                _uiState.update {
+                    it.copy(
+                        isSavingBusiness = false,
+                        errorMessage = "No se pudieron cargar los datos de tu negocio. Inténtalo de nuevo."
+                    )
+                }
+                return@launch
+            }
+
+            val actualizado = base.copy(
+                nombreNegocio = nombre,
+                rubro = state.rubro.trim(),
+                region = state.region.trim(),
+                comuna = state.comuna.trim(),
+                metaMensual = meta
+            )
+
+            businessRepository.saveBusiness(actualizado).fold(
+                {
+                    business = actualizado
+                    _uiState.update { it.copy(isSavingBusiness = false, isEditingBusiness = false) }
+                    render()
+                },
+                { error -> _uiState.update { it.copy(isSavingBusiness = false, errorMessage = error.salesUserMessage()) } }
+            )
+        }
+    }
+
+    private fun refreshBusiness() {
+        viewModelScope.launch {
+            businessRepository.getBusiness().onSuccess { fresh ->
+                if (fresh != null) {
+                    business = fresh
+                    render()
+                }
+            }
         }
     }
 
@@ -89,10 +143,10 @@ class BusinessViewModel(
         val query = state.searchQuery.trim()
         val visible = allProducts.filter { product ->
             (state.selectedFilter == "Todos" ||
-                (state.selectedFilter == "Productos" && product.isProduct && !product.isAsset) ||
-                (state.selectedFilter == "Servicios" && !product.isProduct && !product.isAsset) ||
-                (state.selectedFilter == "Activos" && product.isAsset)) &&
-                (query.isBlank() || product.name.contains(query, true) || product.category.contains(query, true))
+                    (state.selectedFilter == "Productos" && product.isProduct && !product.isAsset) ||
+                    (state.selectedFilter == "Servicios" && !product.isProduct && !product.isAsset) ||
+                    (state.selectedFilter == "Activos" && product.isAsset)) &&
+                    (query.isBlank() || product.name.contains(query, true) || product.category.contains(query, true))
         }.sortedBy { it.name.lowercase() }
         val goal = business?.metaMensual ?: 0L
         val total = monthlySales.sumOf { it.draft.total }
@@ -114,6 +168,7 @@ class BusinessViewModel(
             rubro = if (state.isEditingBusiness) state.rubro else business?.rubro.orEmpty(), actividad = activity,
             region = if (state.isEditingBusiness) state.region else business?.region.orEmpty(),
             comuna = if (state.isEditingBusiness) state.comuna else business?.comuna.orEmpty(),
+            metaMensual = if (state.isEditingBusiness) state.metaMensual else business?.metaMensual?.takeIf { it > 0L }?.toString().orEmpty(),
             registro = if (business != null) "Configurado" else ""
         )
     }

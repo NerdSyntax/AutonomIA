@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.nerdsyntax.juntalucas.core.session.SessionViewModel
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
-
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.auth.ui.account.AccountViewModel
 import com.nerdsyntax.juntalucas.feature.auth.ui.login.LoginViewModel
@@ -19,7 +18,6 @@ import com.nerdsyntax.juntalucas.feature.movements.domain.SalesRepository
 import com.nerdsyntax.juntalucas.feature.movements.domain.ExpensesRepository
 import com.nerdsyntax.juntalucas.feature.movements.ui.AddExpenseViewModel
 import com.nerdsyntax.juntalucas.feature.business.domain.CatalogRepository
-import androidx.lifecycle.SavedStateHandle
 import com.nerdsyntax.juntalucas.feature.business.ui.BusinessViewModel
 import com.nerdsyntax.juntalucas.feature.business.ui.product.AddProductViewModel
 import com.nerdsyntax.juntalucas.feature.ai.ui.AiViewModel
@@ -47,8 +45,8 @@ class AppViewModelFactory(
         modelClass.isAssignableFrom(BusinessViewModel::class.java) -> BusinessViewModel(authRepository, businessRepository, catalogRepository, salesRepository)
         modelClass.isAssignableFrom(AddProductViewModel::class.java) -> AddProductViewModel(authRepository, catalogRepository)
         modelClass.isAssignableFrom(AiViewModel::class.java) -> AiViewModel()
-        modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository, businessRepository)
+        modelClass.isAssignableFrom(ProfileViewModel::class.java) -> ProfileViewModel(authRepository, businessRepository, salesRepository, expensesRepository)
         modelClass.isAssignableFrom(OnboardingViewModel::class.java) -> OnboardingViewModel(businessRepository)
-        else -> throw IllegalArgumentException("ViewModel desconocido: ${modelClass.name}")
+        else -> throw IllegalArgumentException("ViewModel desconocido: \${modelClass.name}")
     } as T
 }

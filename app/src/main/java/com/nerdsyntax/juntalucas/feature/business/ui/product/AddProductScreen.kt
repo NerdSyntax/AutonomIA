@@ -9,22 +9,42 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
+import kotlin.math.abs
 
+private val DarkBlue = Color(0xFF0F2A4A)
+private val LightBg = Color(0xFFF8FAFC)
+private val PurpleAi = Color(0xFF8B5CF6)
+private val GradientStart = Color(0xFF6366F1)
+private val GradientEnd = Color(0xFF9333EA)
+private val TextGray = Color(0xFF475569)
+private val TextMuted = Color(0xFF94A3B8)
+private val BorderGray = Color(0xFFE2E8F0)
+private val GreenText = Color(0xFF15803D)
+private val GreenBg = Color(0xFFF0FDF4)
+private val RedText = Color(0xFFB91C1C)
+private val RedBg = Color(0xFFFEF2F2)
+private val PurpleText = Color(0xFF6D28D9)
+private val PurpleBg = Color(0xFFF5F3FF)
+
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun AddProductScreen(
     state: AddProductUiState,
@@ -36,19 +56,15 @@ fun AddProductScreen(
     onDescripcionChange: (String) -> Unit,
     onStockActualChange: (String) -> Unit,
     onStockMinimoChange: (String) -> Unit,
-    onUnidadChange: (String) -> Unit,
+    onUnidadChange: (String) -> Unit = {},
     onIsActiveChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    val darkBlue = Color(0xFF0F2A4A)
-    val greenPos = Color(0xFF10B981)
-    val lightBg = Color(0xFFF8FAFC)
-
     val symbols = DecimalFormatSymbols().apply { groupingSeparator = '.' }
     val formatter = DecimalFormat("#,###", symbols)
 
-    val gananciaStr = "$${formatter.format(state.ganancia)}"
+    val gananciaStr = (if (state.ganancia < 0) "-" else "") + "$" + formatter.format(abs(state.ganancia))
     val margenStr = "${state.margen.toInt()}%"
 
     Scaffold(
@@ -56,172 +72,369 @@ fun AddProductScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(darkBlue, RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
-                    .padding(top = 48.dp, bottom = 20.dp, start = 8.dp, end = 24.dp)
+                    .background(DarkBlue, RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .padding(top = 48.dp, bottom = 22.dp, start = 8.dp, end = 24.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
                     }
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Agregar producto o servicio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Column {
+                        Text(
+                            text = "Agregar producto o servicio",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Completa los datos para tu catálogo",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         },
-        containerColor = lightBg
+        containerColor = LightBg
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = 20.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Selector entre producto y servicioi
+            Spacer(modifier = Modifier.height(4.dp))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BorderGray),
                 color = Color.White
             ) {
                 Row(
                     modifier = Modifier.padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    TypeButton("Producto", Icons.Default.Inventory, state.isProduct, { onIsProductChange(true) }, Modifier.weight(1f))
-                    TypeButton("Servicio", Icons.Default.Settings, !state.isProduct, { onIsProductChange(false) }, Modifier.weight(1f))
+                    TypePill("Producto", Icons.Default.Inventory, state.isProduct, Modifier.weight(1f)) { onIsProductChange(true) }
+                    TypePill("Servicio", Icons.Default.Settings, !state.isProduct, Modifier.weight(1f)) { onIsProductChange(false) }
                 }
             }
 
-            CustomProductField("Nombre *", state.nombre, "Ej: Cupcakes (docena)", onValueChange = onNombreChange)
-            CustomProductField("Categoría", state.categoria, onValueChange = onCategoriaChange, trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.Gray) })
-            CustomProductField("Precio de venta *", state.precio, "Ej: 21.000", isNumber = true, onValueChange = onPrecioChange)
-            CustomProductField("Costo estimado", state.costo, "Ej: 12.000", isNumber = true, onValueChange = onCostoChange)
+            FormCard(title = "Información básica") {
+                ProductField(
+                    label = "Nombre *",
+                    value = state.nombre,
+                    placeholder = "Ej: Cupcakes (docena)",
+                    enabled = !state.isSaving,
+                    onValueChange = onNombreChange
+                )
+                ProductField(
+                    label = "Categoría",
+                    value = state.categoria,
+                    placeholder = "Ej: Pastelería",
+                    enabled = !state.isSaving,
+                    onValueChange = onCategoriaChange
+                )
+                ProductField(
+                    label = "Descripción (opcional)",
+                    value = state.descripcion,
+                    placeholder = if (state.isProduct) "Características del producto..." else "Detalles del servicio...",
+                    minLines = 2,
+                    enabled = !state.isSaving,
+                    onValueChange = onDescripcionChange
+                )
+            }
 
-            OutlinedTextField(
-                value = state.descripcion, onValueChange = onDescripcionChange,
-                label = { Text("Descripción (opcional)", color = Color.Gray) },
-                placeholder = { Text("Características del producto...", color = Color.LightGray) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color(0xFFE2E8F0),
-                    focusedBorderColor = darkBlue
-                ),
-                minLines = 2
-            )
+            FormCard(title = "Precio y rentabilidad") {
+                ProductField(
+                    label = "Precio de venta *",
+                    value = state.precio,
+                    placeholder = "Ej: 21.000",
+                    isNumber = true,
+                    prefix = "$",
+                    enabled = !state.isSaving,
+                    onValueChange = onPrecioChange
+                )
+                ProductField(
+                    label = "Costo estimado",
+                    value = state.costo,
+                    placeholder = "Ej: 12.000",
+                    isNumber = true,
+                    prefix = "$",
+                    enabled = !state.isSaving,
+                    onValueChange = onCostoChange
+                )
+
+                Text(
+                    text = "Cálculo automático",
+                    color = TextGray,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ResultTile(
+                        label = "Ganancia estimada",
+                        value = gananciaStr,
+                        color = if (state.isProfitable) GreenText else RedText,
+                        background = if (state.isProfitable) GreenBg else RedBg,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ResultTile(
+                        label = "Margen estimado",
+                        value = margenStr,
+                        color = if (state.isProfitable) PurpleText else RedText,
+                        background = if (state.isProfitable) PurpleBg else RedBg,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
 
             if (state.isProduct) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CustomProductField("Stock actual", state.stockActual, isNumber = true, onValueChange = onStockActualChange, modifier = Modifier.weight(1f))
-                    CustomProductField("Stock mínimo", state.stockMinimo, isNumber = true, onValueChange = onStockMinimoChange, modifier = Modifier.weight(1f))
-                    CustomProductField("Unidad", state.unidad, onValueChange = onUnidadChange, modifier = Modifier.weight(1f), trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.Gray) })
-                }
-            }
-
-            //calculadora
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Cálculo automático", color = darkBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text("Ganancia estimada", color = Color.Gray, fontSize = 12.sp)
-                            Text(gananciaStr, color = if (state.isProfitable) greenPos else Color.Red, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Column {
-                            Text("Margen estimado", color = Color.Gray, fontSize = 12.sp)
-                            Text(margenStr, color = if (state.isProfitable) greenPos else Color.Red, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Spacer(modifier = Modifier.width(30.dp))
+                FormCard(title = "Inventario") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        ProductField(
+                            label = "Stock actual",
+                            value = state.stockActual,
+                            isNumber = true,
+                            enabled = !state.isSaving,
+                            onValueChange = onStockActualChange,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ProductField(
+                            label = "Stock mínimo",
+                            value = state.stockMinimo,
+                            isNumber = true,
+                            enabled = !state.isSaving,
+                            onValueChange = onStockMinimoChange,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
 
-            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (state.isSaving) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-
             Card(
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Estado activo", fontWeight = FontWeight.SemiBold, color = darkBlue, fontSize = 15.sp)
-                        Text("Visible y disponible para registrar ventas", color = Color.Gray, fontSize = 13.sp)
+                        Text("Estado activo", fontWeight = FontWeight.SemiBold, color = DarkBlue, fontSize = 15.sp)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Visible y disponible para registrar ventas", color = TextMuted, fontSize = 13.sp)
                     }
                     Switch(
                         checked = state.isActive,
                         onCheckedChange = onIsActiveChange,
+                        enabled = !state.isSaving,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = darkBlue,
+                            checkedTrackColor = PurpleAi,
                             uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFE2E8F0),
+                            uncheckedTrackColor = BorderGray,
                             uncheckedBorderColor = Color.Transparent
                         )
                     )
                 }
             }
 
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            state.errorMessage?.let { message ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = RedBg)
+                ) {
+                    Text(
+                        text = message,
+                        color = RedText,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+
+            if (state.isSaving) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+                    color = PurpleAi,
+                    trackColor = PurpleBg
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedButton(
-                    onClick = onNavigateBack, enabled = !state.isSaving, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)), colors = ButtonDefaults.outlinedButtonColors(contentColor = darkBlue)
-                ) { Text("Cancelar", fontWeight = FontWeight.Bold) }
-                Button(
+                    onClick = onNavigateBack,
+                    enabled = !state.isSaving,
+                    modifier = Modifier.weight(1f).height(54.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, BorderGray),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextGray)
+                ) {
+                    Text("Cancelar", fontWeight = FontWeight.Bold)
+                }
+                GradientButton(
+                    text = if (state.isSaving) "Guardando..." else "Guardar",
                     onClick = onSave,
                     enabled = !state.isSaving,
-                    modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = darkBlue)
-                ) { Text("Guardar", fontWeight = FontWeight.Bold) }
+                    modifier = Modifier.weight(1f).height(54.dp)
+                )
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
-
+//  COMPONENTES
 @Composable
-private fun TypeButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val bgColor = if (isSelected) Color(0xFF0F2A4A) else Color.White
-    val contentColor = if (isSelected) Color.White else Color.Gray
-    val border = if (isSelected) null else BorderStroke(1.dp, Color(0xFFE2E8F0))
-    Surface(modifier = modifier.height(44.dp).clickable { onClick() }, color = bgColor, shape = RoundedCornerShape(8.dp), border = border) {
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text, color = contentColor, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+private fun FormCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(title, color = DarkBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            content()
         }
     }
 }
 
 @Composable
-private fun CustomProductField(label: String, value: String, placeholder: String? = null, isNumber: Boolean = false, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, trailingIcon: @Composable (() -> Unit)? = null) {
+private fun TypePill(
+    text: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val contentColor = if (isSelected) Color.White else TextGray
+    Row(
+        modifier = modifier
+            .height(46.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) Brush.horizontalGradient(listOf(GradientStart, GradientEnd))
+                else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+            )
+            .clickable { onClick() },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            color = contentColor,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 14.sp
+        )
+    }
+}
+
+@Composable
+private fun ResultTile(
+    label: String,
+    value: String,
+    color: Color,
+    background: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(background, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Text(label, color = TextGray, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun ProductField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    isNumber: Boolean = false,
+    prefix: String? = null,
+    minLines: Int = 1,
+    enabled: Boolean = true
+) {
     OutlinedTextField(
-        value = value, onValueChange = onValueChange, label = { Text(label, color = Color.Gray) },
-        placeholder = placeholder?.let { { Text(it, color = Color.LightGray) } }, modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        label = { Text(label, color = TextMuted) },
+        placeholder = placeholder?.let { { Text(it, color = Color(0xFFCBD5E1)) } },
+        prefix = prefix?.let { { Text(it, color = TextGray) } },
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedContainerColor = Color.White,
+            focusedTextColor = DarkBlue,
+            unfocusedTextColor = DarkBlue,
+            disabledTextColor = TextMuted,
+            cursorColor = PurpleAi,
             focusedContainerColor = Color.White,
-            unfocusedBorderColor = Color(0xFFE2E8F0),
-            focusedBorderColor = Color(0xFF0F2A4A)
+            unfocusedBorderColor = BorderGray,
+            focusedBorderColor = PurpleAi,
+            focusedLabelColor = PurpleAi
         ),
-        singleLine = true, trailingIcon = trailingIcon, keyboardOptions = if (isNumber) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
+        singleLine = minLines == 1,
+        minLines = minLines,
+        keyboardOptions = if (isNumber) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
     )
+}
+
+/** Botón principal con degradado morado, igual al acceso a la IA del Dashboard. */
+@Composable
+private fun GradientButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier
+                .alpha(if (enabled) 1f else 0.55f)
+                .background(Brush.horizontalGradient(listOf(GradientStart, GradientEnd)))
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
+    }
 }

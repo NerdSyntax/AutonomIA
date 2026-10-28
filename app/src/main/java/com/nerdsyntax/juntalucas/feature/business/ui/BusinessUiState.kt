@@ -5,7 +5,7 @@ enum class BusinessTab { PRODUCTOS, INFORMACION }
 data class ProductItem(
     val id: String,
     val name: String,
-    val type: String, // Producto servicio o activo
+    val type: String,
     val price: String,
     val cost: String,
     val margin: String,
@@ -23,7 +23,6 @@ data class BusinessUiState(
     val isEditingBusiness: Boolean = false,
     val isSavingBusiness: Boolean = false,
 
-    //Datos genericos para que veas donde va cada cosa
     val businessName: String = "",
     val businessDetails: String = "",
     val productCount: String = "0",
@@ -38,6 +37,7 @@ data class BusinessUiState(
     val actividad: String = "",
     val region: String = "",
     val comuna: String = "",
+    val metaMensual: String = "",
     val moneda: String = "Peso chileno (CLP)",
     val registro: String = ""
 )

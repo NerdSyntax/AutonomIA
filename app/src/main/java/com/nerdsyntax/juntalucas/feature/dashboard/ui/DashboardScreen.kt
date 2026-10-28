@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 import java.util.Locale
+import androidx.compose.material.icons.filled.AutoAwesome
 import android.app.DatePickerDialog
 import androidx.compose.ui.platform.LocalContext
 import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
@@ -129,18 +130,21 @@ private fun HeaderSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(LightBg)
+            .background(
+                color = DarkBlue,
+                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
             .padding(
                 top = 48.dp,
-                bottom = 16.dp,
-                start = 16.dp,
-                end = 16.dp
+                bottom = 24.dp,
+                start = 20.dp,
+                end = 20.dp
             ),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
@@ -149,54 +153,40 @@ private fun HeaderSection(
             ) {
                 Text(
                     text = "Hola, ${state.userName}",
-                    color = Color(0xFF64748B),
-                    fontSize = 14.sp
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
                 )
 
                 Text(
                     text = state.nombreNegocio,
-                    color = DarkBlue,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            IconButton(
-                onClick = {
-                    // Pendiente: conectar con el menú.
-                },
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        color = Color(0xFFE7ECF1),
-                        shape = CircleShape
-                    )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.GridView,
-                    contentDescription = "Menú",
-                    tint = DarkBlue,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            IconButton(
-                onClick = {
-                    // Pendiente: conectar con las notificaciones.
-                },
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        color = Color(0xFFE7ECF1),
-                        shape = CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Notificaciones",
-                    tint = DarkBlue,
-                    modifier = Modifier.size(20.dp)
-                )
+                Surface(
+                    onClick = {
+                        // Pendiente: conectar con las notificaciones.
+                    },
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.15f),
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notificaciones",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -488,7 +478,7 @@ private fun AiAccessSection(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Chat de mi negocio",
+                    text = "Analiza tu negocio con nuestro agente",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -496,7 +486,7 @@ private fun AiAccessSection(
 
 
                 Text(
-                    text = "Conversa sobre los datos de tu negocio",
+                    text = "Analiza y conversa acerca del rendimiento de tu negocio",
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 12.sp,
                     lineHeight = 17.sp

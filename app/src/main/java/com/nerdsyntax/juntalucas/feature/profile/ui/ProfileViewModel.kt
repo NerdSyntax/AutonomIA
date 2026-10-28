@@ -1,6 +1,5 @@
 package com.nerdsyntax.juntalucas.feature.profile.ui
 
-import android.util.Base64
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,9 +8,13 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.Business
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
+import com.nerdsyntax.juntalucas.feature.movements.domain.ExpensesRepository
+import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
+import com.nerdsyntax.juntalucas.feature.movements.domain.SalesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -20,7 +23,9 @@ import java.text.DecimalFormatSymbols
 
 class ProfileViewModel(
     private val authRepository: AuthRepository,
-    private val businessRepository: BusinessRepository
+    private val businessRepository: BusinessRepository,
+    private val salesRepository: SalesRepository,
+    private val expensesRepository: ExpensesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -32,8 +37,6 @@ class ProfileViewModel(
     init {
         loadProfileData()
     }
-
-    //  CARGA
 
     private fun loadProfileData() {
         viewModelScope.launch {
@@ -56,7 +59,6 @@ class ProfileViewModel(
         viewModelScope.launch { cargarDatosNegocio() }
     }
 
-    /** Nombre guardado en el perfil del negocio; si no hay, el de la cuenta de Firebase Auth. */
     private fun nombreVisible(): String =
         cachedBusiness?.nombreDueno?.takeIf { it.isNotBlank() }
             ?: nombreAuth.ifBlank { "Usuario" }
@@ -85,8 +87,6 @@ class ProfileViewModel(
         val formatter = DecimalFormat("#,###", symbols)
         return "$${formatter.format(monto)}"
     }
-
-    //  EDITAR USUARIO
 
     fun abrirEditarUsuario() {
         _uiState.update {
@@ -121,14 +121,14 @@ class ProfileViewModel(
                 FirebaseAuth.getInstance().currentUser
                     ?.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(nuevoNombre).build())
                     ?.await()
-            }.onFailure { Log.e(TAG, "No se pudo actualizar el nombre en Auth", it) }.isSuccess
+            }.onFailure { Log.e(TAG, "No se pudo actualizar en Auth", it) }.isSuccess
 
             val base = cachedBusiness ?: businessRepository.getBusiness().getOrNull()
             val firestoreOk = if (base != null) {
                 val actualizado = base.copy(nombreDueno = nuevoNombre)
                 businessRepository.saveBusiness(actualizado)
                     .onSuccess { cachedBusiness = actualizado }
-                    .onFailure { Log.e(TAG, "No se pudo guardar el nombre en Firestore", it) }
+                    .onFailure { Log.e(TAG, "No se pudo guardar en Firestore", it) }
                     .isSuccess
             } else {
                 false
@@ -148,14 +148,12 @@ class ProfileViewModel(
                 _uiState.update {
                     it.copy(
                         isSaving = false,
-                        statusMessage = "No se pudo actualizar el perfil. Revisa tu conexión e inténtalo de nuevo."
+                        statusMessage = "No se pudo actualizar el perfil. Revisa tu conexión."
                     )
                 }
             }
         }
     }
-
-    //  EDITAR NEGOCIO
 
     fun abrirEditarNegocio() {
         val metaLimpia = cachedBusiness?.metaMensual?.takeIf { it > 0L }?.toString()
@@ -199,7 +197,7 @@ class ProfileViewModel(
         val nuevaMeta = _uiState.value.editMetaInput.filter { it.isDigit() }.toLongOrNull() ?: 0L
 
         if (nuevoNegocio.isBlank() || nuevoRubro.isBlank()) {
-            _uiState.update { it.copy(statusMessage = "Completa el nombre del negocio y el rubro") }
+            _uiState.update { it.copy(statusMessage = "Completa el nombre y el rubro") }
             return
         }
         if (_uiState.value.isSaving) return
@@ -210,10 +208,7 @@ class ProfileViewModel(
             val base = cachedBusiness ?: businessRepository.getBusiness().getOrNull()
             if (base == null) {
                 _uiState.update {
-                    it.copy(
-                        isSaving = false,
-                        statusMessage = "No se pudieron cargar los datos de tu negocio. Inténtalo de nuevo."
-                    )
+                    it.copy(isSaving = false, statusMessage = "No se pudieron cargar los datos.")
                 }
                 return@launch
             }
@@ -235,19 +230,107 @@ class ProfileViewModel(
                             moneda = MONEDA,
                             isEditingBusiness = false,
                             isSaving = false,
-                            statusMessage = "Datos del negocio guardados exitosamente."
+                            statusMessage = "Datos guardados exitosamente."
                         )
                     }
                 }
                 .onFailure { error ->
                     Log.e(TAG, "No se pudo guardar el negocio", error)
                     _uiState.update {
-                        it.copy(isSaving = false, statusMessage = "Error al guardar los datos.")
+                        it.copy(isSaving = false, statusMessage = "Error al guardar.")
                     }
                 }
         }
     }
 
+    fun exportarDatosCsv(context: android.content.Context) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(statusMessage = "Generando reporte de Firebase...") }
+
+            try {
+                val uid = authRepository.currentUser.value?.uid
+                if (uid == null) {
+                    _uiState.update { it.copy(statusMessage = "Debes iniciar sesión para exportar.") }
+                    return@launch
+                }
+
+                val business = cachedBusiness
+                val nombreNegocio = business?.nombreNegocio ?: "Mi Negocio"
+                val metaMensual = business?.metaMensual ?: 0L
+                val currentMonth = SaleDates.today().take(7)
+
+                val salesResult = salesRepository.observeMonth(uid, currentMonth).first()
+                val expensesResult = expensesRepository.observeMonth(uid, currentMonth).first()
+
+                val sales = salesResult.getOrNull()?.value ?: emptyList()
+                val expenses = expensesResult.getOrNull()?.value ?: emptyList()
+
+                val csvContent = buildString {
+                    appendLine("sep=;")
+                    appendLine("REPORTE FINANCIERO - ${nombreNegocio.uppercase()}")
+                    appendLine("Periodo analizado:;$currentMonth")
+                    appendLine("Meta mensual configurada:;$metaMensual")
+                    appendLine()
+
+                    appendLine("VENTAS;;;;;GASTOS;;;;")
+                    appendLine("FECHA;PRODUCTO;MONTO;MEDIO PAGO;;FECHA;DESCRIPCION;CATEGORIA;MONTO;MEDIO PAGO")
+
+                    val sortedSales = sales.sortedByDescending { it.draft.saleDate }
+                    val sortedExpenses = expenses.sortedByDescending { it.draft.expenseDate }
+
+                    val maxRows = maxOf(sortedSales.size, sortedExpenses.size)
+
+                    for (i in 0 until maxRows) {
+                        val sale = sortedSales.getOrNull(i)
+                        val expense = sortedExpenses.getOrNull(i)
+
+                        val saleCols = if (sale != null) {
+                            val nombre = sale.productName.replace(";", ",")
+                            "${sale.draft.saleDate};$nombre;${sale.draft.total};${sale.draft.paymentMethod.label}"
+                        } else {
+                            ";;;"
+                        }
+
+                        val sepCol = ""
+
+                        val expenseCols = if (expense != null) {
+                            val desc = expense.draft.description.replace(";", ",")
+                            val cat = expense.draft.category.replace(";", ",")
+                            "${expense.draft.expenseDate};$desc;$cat;${expense.draft.amount};${expense.draft.paymentMethod.label}"
+                        } else {
+                            ";;;;"
+                        }
+
+                        appendLine("$saleCols;$sepCol;$expenseCols")
+                    }
+                }
+
+                val fileName = "Reporte_${nombreNegocio.replace(" ", "_")}_$currentMonth.csv"
+                val file = java.io.File(context.cacheDir, fileName)
+                file.writeText("\uFEFF$csvContent", Charsets.UTF_8)
+
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    file
+                )
+
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Reporte Financiero $currentMonth")
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                context.startActivity(android.content.Intent.createChooser(intent, "Exportar movimientos"))
+                clearStatusMessage()
+
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileVM", "Error al generar CSV", e)
+                _uiState.update { it.copy(statusMessage = "Error al exportar los datos.") }
+            }
+        }
+    }
 
     fun clearStatusMessage() {
         _uiState.update { it.copy(statusMessage = null) }
@@ -269,5 +352,4 @@ class ProfileViewModel(
         const val TAG = "ProfileVM"
         const val MONEDA = "Peso chileno (CLP)"
     }
-
 }

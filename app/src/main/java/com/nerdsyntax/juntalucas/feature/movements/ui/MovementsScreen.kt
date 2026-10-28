@@ -1,5 +1,6 @@
 package com.nerdsyntax.juntalucas.feature.movements.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -10,13 +11,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nerdsyntax.juntalucas.feature.movements.domain.PaymentMethod
@@ -24,9 +29,22 @@ import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
-private val GreenPos = Color(0xFF10B981)
-private val RedNeg = Color(0xFFEF4444)
-private val PurpleLine = Color(0xFF8B5CF6)
+private val TextGray = Color(0xFF475569)
+private val BorderLight = Color(0xFFE2E8F0)
+
+private val GreenPos = Color(0xFF15803D)
+private val GreenSoftBg = Color(0xFFF0FDF4)
+private val RedNeg = Color(0xFFB91C1C)
+private val RedSoftBg = Color(0xFFFEF2F2)
+
+private val GradientPurpleStart = Color(0xFF6366F1)
+private val GradientPurpleEnd = Color(0xFF9333EA)
+private val BrandPurple = Color(0xFF7C3AED)
+private val LightPurple = Color(0xFFF3E8FF)
+
+private val PrimaryPurpleGradient = Brush.horizontalGradient(
+    colors = listOf(GradientPurpleStart, GradientPurpleEnd)
+)
 
 @Composable
 fun MovementsScreen(
@@ -38,6 +56,9 @@ fun MovementsScreen(
     onRetry: () -> Unit = {},
     onChangeMonth: (Int) -> Unit = {}
 ) {
+    val isSalesTab = state.selectedTab == MovementTab.VENTAS
+    val currentMonthLabel = SaleDates.monthLabel(state.month).replaceFirstChar { it.uppercase() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -53,99 +74,220 @@ fun MovementsScreen(
                     .fillMaxWidth()
                     .background(
                         color = DarkBlue,
-                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
                     )
-                    .padding(top = 48.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+                    .padding(top = 48.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
             ) {
-                Text("Movimientos", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // PestaÃ±a de ventas y gastos
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TabButton(
-                        text = "Ventas",
-                        isSelected = state.selectedTab == MovementTab.VENTAS,
-                        onClick = { onTabSelected(MovementTab.VENTAS) }
-                    )
-                    TabButton(
-                        text = "Gastos",
-                        isSelected = state.selectedTab == MovementTab.GASTOS,
-                        onClick = { onTabSelected(MovementTab.GASTOS) }
-                    )
+                    Column {
+                        Text(
+                            text = "REGISTRO FINANCIERO",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.1.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Movimientos",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color.White.copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            IconButton(
+                                onClick = { onChangeMonth(-1) },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ChevronLeft,
+                                    contentDescription = "Mes anterior",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = currentMonthLabel,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+                            IconButton(
+                                onClick = { onChangeMonth(1) },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = "Mes siguiente",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (state.selectedTab == MovementTab.VENTAS) "Total vendido en ${SaleDates.monthLabel(state.month)}" else "Total gastado en ${SaleDates.monthLabel(state.month)}",
-                            color = Color.LightGray,
-                            fontSize = 12.sp
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SegmentedTabItem(
+                            modifier = Modifier.weight(1f),
+                            text = "Ventas",
+                            isSelected = isSalesTab,
+                            onClick = { onTabSelected(MovementTab.VENTAS) }
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (state.selectedTab == MovementTab.VENTAS) state.totalVendido else state.totalGastos,
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.ExtraBold
+                        SegmentedTabItem(
+                            modifier = Modifier.weight(1f),
+                            text = "Gastos",
+                            isSelected = !isSalesTab,
+                            onClick = { onTabSelected(MovementTab.GASTOS) }
                         )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(if (state.selectedTab == MovementTab.VENTAS) "Ticket promedio" else "Gasto promedio", color = Color.LightGray, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(state.ticketPromedio, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { onChangeMonth(-1) }) { Icon(Icons.Default.ChevronLeft, "Mes anterior", tint = Color.White) }
-                        Text(SaleDates.monthLabel(state.month), color = Color.White)
-                        IconButton(onClick = { onChangeMonth(1) }) { Icon(Icons.Default.ChevronRight, "Mes siguiente", tint = Color.White) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        modifier = Modifier.weight(1.25f)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = if (isSalesTab) "Total vendido" else "Total gastado",
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (isSalesTab) state.totalVendido else state.totalGastos,
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
                     }
-                    Text(if (state.selectedTab == MovementTab.VENTAS) "Resumen de las ventas visibles del mes; incluye búsqueda y filtros." else "Resumen de los gastos visibles del mes; incluye búsqueda y filtros.", color = Color.LightGray, fontSize = 12.sp)
+
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = if (isSalesTab) "Ticket promedio" else "Gasto promedio",
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = state.ticketPromedio,
+                                color = Color.White,
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(listOf(PurpleLine, Color(0xFF4C1D95))),
-                            shape = RoundedCornerShape(1.5.dp)
-                        )
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(PrimaryPurpleGradient)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
+            Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color.White,
+                    shadowElevation = 1.dp,
+                    border = BorderStroke(1.dp, BorderLight),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = onSearchChange,
+                        placeholder = {
+                            Text(
+                                text = if (isSalesTab) "Buscar venta por nombre..." else "Buscar gasto por descripción...",
+                                color = TextGray.copy(alpha = 0.6f),
+                                fontSize = 14.sp
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = BrandPurple
+                            )
+                        },
+                        trailingIcon = {
+                            if (state.searchQuery.isNotBlank()) {
+                                IconButton(onClick = { onSearchChange("") }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Limpiar",
+                                        tint = TextGray,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedContainerColor = Color.White,
+                            focusedContainerColor = Color.White,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = BrandPurple
+                        ),
+                        singleLine = true
+                    )
+                }
 
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = onSearchChange,
-                    placeholder = { Text(if (state.selectedTab == MovementTab.VENTAS) "Buscar venta..." else "Buscar gasto...", color = Color.Gray) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = Color.White,
-                        focusedContainerColor = Color.White,
-                        unfocusedBorderColor = Color(0xFFE2E8F0),
-                        focusedBorderColor = DarkBlue
-                    ),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Row(
                     modifier = Modifier
@@ -155,144 +297,304 @@ fun MovementsScreen(
                 ) {
                     val filters = listOf("Todos") + PaymentMethod.entries.map { it.label }
                     filters.forEach { filter ->
-                        FilterChip(
-                            selected = state.selectedFilter == filter,
+                        val isSelected = state.selectedFilter == filter
+                        Surface(
                             onClick = { onFilterSelected(filter) },
-                            label = { Text(filter) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = DarkBlue,
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White,
-                                labelColor = Color.DarkGray
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = state.selectedFilter == filter,
-                                borderColor = Color(0xFFE2E8F0)
+                            shape = RoundedCornerShape(50),
+                            color = if (isSelected) DarkBlue else Color.White,
+                            border = BorderStroke(1.dp, if (isSelected) DarkBlue else BorderLight),
+                            shadowElevation = if (isSelected) 1.dp else 0.dp
+                        ) {
+                            Text(
+                                text = filter,
+                                color = if (isSelected) Color.White else TextGray,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
-                        )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        if (state.selectedTab == MovementTab.VENTAS) {
-                            when {
-                                state.isLoading -> { CircularProgressIndicator(); Text("Cargando ventas...") }
-                                state.errorMessage != null -> {
-                                    Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
-                                    TextButton(onClick = onRetry) { Text("Reintentar") }
-                                }
-                                state.movements.isEmpty() -> Text(
-                                    if (state.searchQuery.isNotBlank() || state.selectedFilter != "Todos") "No hay ventas que coincidan con la bÃºsqueda y el filtro."
-                                    else "No tienes ventas registradas en este mes.", color = Color.Gray)
-                            }
-                            if (state.fromCache && state.errorMessage == null) {
-                                Text("Datos guardados en el dispositivo. Pendientes de confirmar con Firebase.", color = Color.Gray)
-                                TextButton(onClick = onRetry) { Text("Actualizar") }
-                            }
-                        } else {
-                            when {
-                                state.isLoading -> { CircularProgressIndicator(); Text("Cargando gastos...") }
-                                state.errorMessage != null -> { Text(state.errorMessage, color = MaterialTheme.colorScheme.error); TextButton(onClick = onRetry) { Text("Reintentar") } }
-                                state.movements.isEmpty() -> Text(if (state.searchQuery.isNotBlank() || state.selectedFilter != "Todos") "No hay gastos que coincidan con la bÃºsqueda y el filtro." else "No tienes gastos registrados en este mes.", color = Color.Gray)
-                            }
-                            if (state.fromCache && state.errorMessage == null) { Text("Datos guardados en el dispositivo. Pendientes de confirmar con Firebase.", color = Color.Gray); TextButton(onClick = onRetry) { Text("Actualizar") } }
-                        }
-                        state.movements.forEach { mov ->
+                if (state.fromCache && state.errorMessage == null) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = LightPurple,
+                        border = BorderStroke(1.dp, BrandPurple.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                val iconColor = if (mov.isIncome) GreenPos else RedNeg
-                                val bgColor = if (mov.isIncome) Color(0xFFD1FAE5) else Color(0xFFFEE2E2)
+                                Icon(
+                                    imageVector = Icons.Outlined.Info,
+                                    contentDescription = null,
+                                    tint = BrandPurple,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Datos locales pendientes de sincronizar.",
+                                    color = DarkBlue,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            TextButton(onClick = onRetry) {
+                                Text("Actualizar", color = BrandPurple, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
 
-                                Box(
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    shape = RoundedCornerShape(20.dp),
+                    shadowElevation = 1.dp,
+                    border = BorderStroke(0.5.dp, BorderLight)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        when {
+                            state.isLoading -> {
+                                Column(
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .background(bgColor, CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Icon(
-                                        imageVector = if (mov.isIncome) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                                        contentDescription = null,
-                                        tint = iconColor
+                                    CircularProgressIndicator(color = BrandPurple, strokeWidth = 3.dp)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = if (isSalesTab) "Cargando ventas..." else "Cargando gastos...",
+                                        color = TextGray,
+                                        fontSize = 14.sp
                                     )
                                 }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(mov.title, fontWeight = FontWeight.SemiBold, color = DarkBlue, fontSize = 14.sp)
-                                    Text("${mov.date} Â· ${mov.paymentMethod}", color = Color.Gray, fontSize = 12.sp)
-                                }
-
-                                Text(mov.amount, fontWeight = FontWeight.Bold, color = iconColor, fontSize = 15.sp)
                             }
-                            if (mov != state.movements.last()) {
-                                HorizontalDivider(color = Color(0xFFF1F5F9))
+
+                            state.errorMessage != null -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = state.errorMessage,
+                                        color = RedNeg,
+                                        fontSize = 14.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = onRetry,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Reintentar")
+                                    }
+                                }
+                            }
+
+                            state.movements.isEmpty() -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp, horizontal = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .background(LightBg),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.ReceiptLong,
+                                            contentDescription = null,
+                                            tint = TextGray.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = if (state.searchQuery.isNotBlank() || state.selectedFilter != "Todos") {
+                                            if (isSalesTab) "Sin resultados para tu búsqueda de ventas"
+                                            else "Sin resultados para tu búsqueda de gastos"
+                                        } else {
+                                            if (isSalesTab) "Aún no registras ventas este mes"
+                                            else "Aún no registras gastos este mes"
+                                        },
+                                        color = DarkBlue,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = if (isSalesTab) "Usa el botón '+ Nueva venta' para comenzar."
+                                        else "Usa el botón '+ Nuevo gasto' para registrar tus egresos.",
+                                        color = TextGray,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                state.movements.forEachIndexed { index, mov ->
+                                    val iconColor = if (mov.isIncome) GreenPos else RedNeg
+                                    val bgColor = if (mov.isIncome) GreenSoftBg else RedSoftBg
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(bgColor),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = if (mov.isIncome) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                                contentDescription = null,
+                                                tint = iconColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(14.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = mov.title,
+                                                fontWeight = FontWeight.Bold,
+                                                color = DarkBlue,
+                                                fontSize = 15.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = mov.date,
+                                                    color = TextGray,
+                                                    fontSize = 12.sp
+                                                )
+                                                Text(
+                                                    text = " · ",
+                                                    color = TextGray,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = LightBg
+                                                ) {
+                                                    Text(
+                                                        text = mov.paymentMethod,
+                                                        color = DarkBlue,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Text(
+                                            text = mov.amount,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = iconColor,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+
+                                    if (index < state.movements.lastIndex) {
+                                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(80.dp))
+                Spacer(modifier = Modifier.height(100.dp))
             }
         }
 
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(24.dp)
+                .padding(end = 20.dp, bottom = 24.dp)
         ) {
-            Button(
-                onClick = { onAddClick(state.selectedTab == MovementTab.VENTAS) },
-                colors = ButtonDefaults.buttonColors(containerColor = DarkBlue),
-                shape = RoundedCornerShape(24.dp),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+            Surface(
+                onClick = { onAddClick(isSalesTab) },
+                shape = RoundedCornerShape(50),
+                shadowElevation = 6.dp,
+                color = Color.Transparent
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (state.selectedTab == MovementTab.VENTAS) "Nueva venta" else "Nuevo gasto",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
+                Row(
+                    modifier = Modifier
+                        .background(PrimaryPurpleGradient)
+                        .padding(horizontal = 22.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isSalesTab) "Nueva venta" else "Nuevo gasto",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .clickable { onClick() }
-            .padding(horizontal = 24.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun SegmentedTabItem(
+    modifier: Modifier = Modifier,
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) Color.White else Color.Transparent,
+        shadowElevation = if (isSelected) 2.dp else 0.dp,
+        modifier = modifier.height(40.dp)
     ) {
-        Text(
-            text = text,
-            color = if (isSelected) Color.White else Color.Gray,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 16.sp
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .width(50.dp)
-                .height(3.dp)
-                .background(if (isSelected) Color.White else Color.Transparent, RoundedCornerShape(1.5.dp))
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                color = if (isSelected) DarkBlue else Color.White.copy(alpha = 0.75f),
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 14.sp
+            )
+        }
     }
 }

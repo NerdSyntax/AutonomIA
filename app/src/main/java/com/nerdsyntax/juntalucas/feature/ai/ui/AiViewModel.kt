@@ -165,8 +165,6 @@ class AiViewModel(
             runCatching { FirebaseAuth.getInstance().removeAuthStateListener(l) }
         }
     }
-    //  SESIÓN Y REINICIO
-
     private fun observarSesionYCargar() {
         val authFlow = authRepository?.currentUser
         if (authFlow != null) {
@@ -278,8 +276,6 @@ class AiViewModel(
 
         currentUid?.let { cargarDatosPeriodo(mesActualCodigo, it) }
     }
-
-    //  NAVEGACIÓN / ACCIONES DE UI
     fun abrirPantallaPrincipal() {
         actualizarPeriodosSiCambioElMes()
         _uiState.update { it.copy(subScreen = AiSubScreen.HOME) }
@@ -455,9 +451,6 @@ class AiViewModel(
             }
         }
     }
-
-    //  REPORTE ESTRUCTURADO
-
     private suspend fun construirReporteEnVivo(periodo: String): AiStructuredReport {
         val ventas = totalVentasClp
         val gastos = totalGastosClp
@@ -846,9 +839,6 @@ class AiViewModel(
             lista.takeIf { it.isNotEmpty() }
         }.getOrNull()
     }
-
-    //  PERFIL DEL CLIENTE
-
     private fun aplanarMapa(
         data: Map<*, *>,
         prefijo: String = "",
@@ -1014,8 +1004,6 @@ class AiViewModel(
     private fun calcularAgrupacionGastos(gastosPares: List<Pair<String, Long>>) {
         listaGastosAgrupados = agruparItems(gastosPares)
     }
-    //  HISTORIAL (FIRESTORE)
-
     private fun cargarHistorialDeFirebase(uid: String) {
         viewModelScope.launch {
             runCatching {
@@ -1187,9 +1175,6 @@ class AiViewModel(
             Log.e(TAG, "No se pudo limpiar el historial antiguo", it)
         }
     }
-
-    //  CARGA DE DATOS DEL PERIODO
-
     private fun cargarDatosPeriodo(periodoCodigo: String, uidForzado: String? = null) {
         viewModelScope.launch {
             cargarDatosPeriodoSuspend(periodoCodigo, uidForzado)
@@ -1424,8 +1409,6 @@ class AiViewModel(
         }
         return ""
     }
-
-    //  MODULO DE ANALISIS IA
     private fun fechaHoy(): String =
         runCatching { SaleDates.today() }.getOrElse { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
 
@@ -2486,8 +2469,6 @@ class AiViewModel(
 
         /** Cantidad máxima de análisis de IA que se conservan en el historial (Firestore y pantalla). */
         const val MAX_HISTORIAL = 5
-
-        // MOTOR DE ANALISIS
         const val MARGEN_OBJETIVO_PCT = 30.0
         const val MARGEN_MINIMO_PRODUCTO_PCT = 20.0
         const val COMISION_TARJETA_SUPUESTA = 0.02
