@@ -1,8 +1,9 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import androidx.compose.foundation.background
-
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodSelector
 import androidx.compose.foundation.clickable
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +27,8 @@ import android.app.DatePickerDialog
 import androidx.compose.ui.platform.LocalContext
 import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
 import androidx.compose.runtime.*
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardCharts
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.ExpenseDistributionCard
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
@@ -34,11 +37,13 @@ private val RedNeg = Color(0xFFEF4444)
 private val OrangeWarn = Color(0xFFF59E0B)
 private val PurpleAi = Color(0xFF8B5CF6)
 
+
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
     onNavigateToAi: () -> Unit,
     onNavigateToMonthlyAnalysis: () -> Unit,
+    onPeriodApplied: (DashboardPeriodFilter, String, String) -> Unit,
     onFilterSelected: (DashboardPeriodFilter) -> Unit = {},
     onCustomStart: (String) -> Unit = {},
     onCustomEnd: (String) -> Unit = {},
@@ -64,8 +69,7 @@ fun DashboardScreen(
         HeaderSection(
             state = state,
             onFilterSelected = onFilterSelected,
-            onCustomStart = onCustomStart,
-            onCustomEnd = onCustomEnd
+            onPeriodApplied = onPeriodApplied
         )
 
         Column(
@@ -117,56 +121,93 @@ fun DashboardScreen(
     }
 }
 @Composable
-private fun HeaderSection(state: DashboardUiState, onFilterSelected: (DashboardPeriodFilter) -> Unit, onCustomStart: (String) -> Unit, onCustomEnd: (String) -> Unit) {
-    val context = LocalContext.current
+private fun HeaderSection(
+    state: DashboardUiState,
+    onFilterSelected: (DashboardPeriodFilter) -> Unit,
+    onPeriodApplied: (DashboardPeriodFilter, String, String) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                color = DarkBlue,
-                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
-            )
-            .padding(top = 48.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+            .background(LightBg)
+            .padding(
+                top = 48.dp,
+                bottom = 16.dp,
+                start = 16.dp,
+                end = 16.dp
+            ),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Hola, ${state.userName}", color = Color.LightGray, fontSize = 14.sp)
-                Text(state.nombreNegocio, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Hola, ${state.userName}",
+                    color = Color(0xFF64748B),
+                    fontSize = 14.sp
+                )
+
+                Text(
+                    text = state.nombreNegocio,
+                    color = DarkBlue,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                IconButton(onClick = { }, modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape).size(40.dp)) {
-                    Icon(Icons.Default.GridView, contentDescription = "Menú", tint = Color.White)
-                }
-                IconButton(onClick = { }, modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape).size(40.dp)) {
-                    Icon(Icons.Default.Notifications, contentDescription = "Notificaciones", tint = Color.White)
-                }
+
+            IconButton(
+                onClick = {
+                    // Pendiente: conectar con el menú.
+                },
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = Color(0xFFE7ECF1),
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.GridView,
+                    contentDescription = "Menú",
+                    tint = DarkBlue,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            IconButton(
+                onClick = {
+                    // Pendiente: conectar con las notificaciones.
+                },
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = Color(0xFFE7ECF1),
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notificaciones",
+                    tint = DarkBlue,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            DashboardPeriodFilter.entries.forEach { period ->
-                val selected = state.selectedFilter == period
-                Box(modifier = Modifier.clickable { onFilterSelected(period) }.background(if (selected) Color.White.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Text(period.label, color = if (selected) Color.White else Color.Gray, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
-                }
-            }
-        }
-        if (state.selectedFilter == DashboardPeriodFilter.CUSTOM) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { pickDate(context, state.customStart, onCustomStart) }, modifier = Modifier.weight(1f)) { Text(state.customStart.ifBlank { "Desde" }) }
-                OutlinedButton(onClick = { pickDate(context, state.customEnd, onCustomEnd) }, modifier = Modifier.weight(1f)) { Text(state.customEnd.ifBlank { "Hasta" }) }
-            }
-        }
+        DashboardPeriodSelector(
+            selectedFilter = state.selectedFilter,
+            dateLabel = state.periodLabel,
+            initialStart = state.customStart,
+            initialEnd = state.customEnd,
+            onFilterSelected = onFilterSelected,
+            onPeriodApplied = onPeriodApplied
+        )
     }
 }
 
