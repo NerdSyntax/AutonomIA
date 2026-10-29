@@ -40,7 +40,10 @@ class AccountViewModel(private val authRepository: AuthRepository) : ViewModel()
         viewModelScope.launch {
             setLoading()
             authRepository.deleteCurrentUser()
-                .onSuccess { _uiState.update { it.copy(isLoading = false) } }
+                .onSuccess {
+                    logout()
+                    _uiState.update { it.copy(isLoading = false) }
+                }
                 .onFailure(::showError)
         }
     }

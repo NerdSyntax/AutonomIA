@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+
 private val DarkBlue = Color(0xFF0F2A4A)
 private val HeaderGradientEnd = Color(0xFF1E3A5F)
 private val GradientPurpleStart = Color(0xFF6366F1)
@@ -83,20 +85,11 @@ fun AiScreen(
     state: AiUiState,
     vm: AiViewModel,
 ) {
-    var mostrarComoFunciona by remember { mutableStateOf(false) }
-
-    if (mostrarComoFunciona) {
-        ComoFuncionaAnalisisDialog(
-            onDismiss = { mostrarComoFunciona = false }
-        )
-    }
-
     if (state.isAnalyzing) {
         BackHandler(enabled = true) {}
         AiLoadingScreen(state = state)
         return
     }
-
     when (state.subScreen) {
         AiSubScreen.CHATBOX -> {
             BackHandler { vm.abrirPantallaPrincipal() }
@@ -106,7 +99,6 @@ fun AiScreen(
                 onSendMessage = { texto -> vm.onSendMessage(texto) }
             )
         }
-
         AiSubScreen.ANALYSIS_RESULT -> {
             BackHandler { vm.abrirPantallaPrincipal() }
             val report = state.currentReport
@@ -121,7 +113,6 @@ fun AiScreen(
                 vm.abrirPantallaPrincipal()
             }
         }
-
         AiSubScreen.ANALYSIS_HISTORY -> {
             BackHandler { vm.abrirPantallaPrincipal() }
             AiAnalysisHistoryView(
@@ -131,398 +122,406 @@ fun AiScreen(
                 onViewFullAnalysis = { vm.verAnalisisDesdeHistorial(it) }
             )
         }
-
         AiSubScreen.HOME -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BgGray)
-                    .verticalScroll(rememberScrollState())
+            AiHomeContent(state = state, vm = vm)
+        }
+    }
+}
+
+@Composable
+private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
+    var mostrarComoFunciona by remember { mutableStateOf(false) }
+
+    if (mostrarComoFunciona) {
+        ComoFuncionaAnalisisDialog(onDismiss = { mostrarComoFunciona = false })
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgGray)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = DarkBlue,
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+                .padding(top = 48.dp, bottom = 28.dp, start = 24.dp, end = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Column {
+                    Text(
+                        text = "INTELIGENCIA ARTIFICIAL",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Consultoría Inteligente",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = DarkBlue,
-                            shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
-                        )
-                        .padding(top = 48.dp, bottom = 28.dp, start = 24.dp, end = 24.dp)
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(AiPurpleGradient),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(LightPurple),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column {
-                            Text(
-                                text = "INTELIGENCIA ARTIFICIAL",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Consultoría Inteligente",
-                                color = Color.White,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Box(
+                        Text("✨", fontSize = 18.sp)
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = buildAnnotatedString {
+                            append("Nuestro agente financiero evaluará los indicadores clave de tu negocio e identificará ")
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = DarkBlue)) {
+                                append("oportunidades estratégicas de mejora.")
+                            }
+                        },
+                        color = TextGray,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(22.dp))
+
+            Text(
+                text = "Periodo a evaluar",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = DarkBlue
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            if (state.periodos.isEmpty()) {
+                Text(
+                    text = "Cargando periodos...",
+                    color = TextGray,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(state.periodos) { periodo ->
+                        val isSelected = periodo == state.periodoSeleccionado
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) LightPurple else Color.White,
+                            border = BorderStroke(
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) BrandPurple else BorderLight
+                            ),
+                            shadowElevation = if (isSelected) 0.dp else 1.dp,
                             modifier = Modifier
-                                .size(46.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(AiPurpleGradient),
-                            contentAlignment = Alignment.Center
+                                .clickable { vm.onPeriodoSelected(periodo) }
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
+                            Text(
+                                text = periodo,
+                                color = if (isSelected) BrandPurple else TextGray,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
+            }
 
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        shadowElevation = 1.dp,
-                        modifier = Modifier.fillMaxWidth()
+            Spacer(modifier = Modifier.height(22.dp))
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Métricas disponibles para el análisis",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = DarkBlue
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(LightPurple),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("✨", fontSize = 18.sp)
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Text(
-                                text = buildAnnotatedString {
-                                    append("Nuestro agente financiero evaluará los indicadores clave de tu negocio e identificará ")
-                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = DarkBlue)) {
-                                        append("oportunidades estratégicas de mejora.")
-                                    }
-                                },
-                                color = TextGray,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        KpiStatPill(
+                            modifier = Modifier.weight(1f),
+                            label = "Ventas registradas",
+                            value = state.ventasRegistradas.toString(),
+                            valueColor = GreenSuccess,
+                            bgColor = GreenSoftBg
+                        )
+                        KpiStatPill(
+                            modifier = Modifier.weight(1f),
+                            label = "Gastos registrados",
+                            value = state.gastosRegistrados.toString(),
+                            valueColor = RedDanger,
+                            bgColor = RedSoftBg
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(22.dp))
-
-                    Text(
-                        text = "Periodo a evaluar",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = DarkBlue
-                    )
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        if (state.periodos.isEmpty()) {
-                            Text(
-                                text = "Cargando periodos...",
-                                color = TextGray,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-                        } else {
-                            state.periodos.forEach { periodo ->
-                                val isSelected = periodo == state.periodoSeleccionado
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isSelected) LightPurple else Color.White,
-                                    border = BorderStroke(
-                                        width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) BrandPurple else BorderLight
-                                    ),
-                                    shadowElevation = if (isSelected) 0.dp else 1.dp,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable { vm.onPeriodoSelected(periodo) }
-                                ) {
-                                    Text(
-                                        text = periodo,
-                                        color = if (isSelected) BrandPurple else TextGray,
-                                        fontSize = 13.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        modifier = Modifier.padding(vertical = 12.dp),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(22.dp))
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        shadowElevation = 1.dp,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Métricas disponibles para el análisis",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = DarkBlue
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                KpiStatPill(
-                                    modifier = Modifier.weight(1f),
-                                    label = "Ventas registradas",
-                                    value = state.ventasRegistradas.toString(),
-                                    valueColor = GreenSuccess,
-                                    bgColor = GreenSoftBg
-                                )
-                                KpiStatPill(
-                                    modifier = Modifier.weight(1f),
-                                    label = "Gastos registrados",
-                                    value = state.gastosRegistrados.toString(),
-                                    valueColor = RedDanger,
-                                    bgColor = RedSoftBg
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                KpiStatPill(
-                                    modifier = Modifier.weight(1f),
-                                    label = "Productos activos",
-                                    value = state.productosCatalogo.toString(),
-                                    valueColor = DarkBlue,
-                                    bgColor = BgGray
-                                )
-                                KpiStatPill(
-                                    modifier = Modifier.weight(1f),
-                                    label = "Servicios activos",
-                                    value = state.serviciosCatalogo.toString(),
-                                    valueColor = DarkBlue,
-                                    bgColor = BgGray
-                                )
-                            }
-
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 14.dp),
-                                color = Color(0xFFF1F5F9)
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Base comparativa", color = TextGray, fontSize = 13.sp)
-                                if (state.periodoComparacion.isNotEmpty()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = SoftIndigoBg
-                                    ) {
-                                        Text(
-                                            text = state.periodoComparacion,
-                                            color = BlueBadge,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                        )
-                                    }
-                                } else {
-                                    Text("Sin periodo previo", color = TextGray, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = PrivacyBg,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Security,
-                                contentDescription = null,
-                                tint = BlueBadge,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = "Procesamiento confidencial y seguro",
-                                    color = DarkBlue,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Se evalúan exclusivamente métricas agregadas sin exponer datos sensibles de tus clientes.",
-                                    color = TextGray,
-                                    fontSize = 12.sp,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Surface(
-                        onClick = { vm.onGenerarAnalisisEstructuradoClick() },
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.Transparent,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .background(AiPurpleGradient)
-                                .padding(horizontal = 20.dp, vertical = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Generar Diagnóstico Ejecutivo (3 claves)",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        onClick = { vm.abrirChatboxDirecto() },
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        border = BorderStroke(1.5.dp, GradientPurpleStart.copy(alpha = 0.4f)),
-                        shadowElevation = 1.dp,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(LightPurple),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ChatBubbleOutline,
-                                    contentDescription = null,
-                                    tint = BrandPurple,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Asistente Financiero IA",
-                                    color = DarkBlue,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Consulta interactiva sobre métricas y rentabilidad",
-                                    color = TextGray,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = BrandPurple
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(22.dp))
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "¿Cómo funciona nuestra inteligencia artificial?",
-                            color = BrandPurple,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { mostrarComoFunciona = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        KpiStatPill(
+                            modifier = Modifier.weight(1f),
+                            label = "Productos activos",
+                            value = state.productosCatalogo.toString(),
+                            valueColor = DarkBlue,
+                            bgColor = BgGray
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { vm.abrirHistorialAnalisis() }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Schedule,
-                                contentDescription = null,
-                                tint = TextGray,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (state.historialAnalisis.isNotEmpty()) {
-                                    "Historial de informes (${state.historialAnalisis.size})"
-                                } else {
-                                    "Historial de informes"
-                                },
-                                color = TextGray,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                        KpiStatPill(
+                            modifier = Modifier.weight(1f),
+                            label = "Servicios activos",
+                            value = state.serviciosCatalogo.toString(),
+                            valueColor = DarkBlue,
+                            bgColor = BgGray
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 14.dp),
+                        color = Color(0xFFF1F5F9)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Base comparativa", color = TextGray, fontSize = 13.sp)
+                        if (state.periodoComparacion.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = SoftIndigoBg
+                            ) {
+                                Text(
+                                    text = state.periodoComparacion,
+                                    color = BlueBadge,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        } else {
+                            Text("Sin periodo previo", color = TextGray, fontSize = 13.sp)
                         }
                     }
-                    Spacer(modifier = Modifier.height(90.dp))
                 }
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = PrivacyBg,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Security,
+                        contentDescription = null,
+                        tint = BlueBadge,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Procesamiento confidencial y seguro",
+                            color = DarkBlue,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Se evalúan exclusivamente métricas agregadas sin exponer datos sensibles de tus clientes.",
+                            color = TextGray,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Surface(
+                onClick = { vm.onGenerarAnalisisEstructuradoClick() },
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Transparent,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .background(AiPurpleGradient)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Generar Diagnóstico Ejecutivo (3 claves)",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Surface(
+                onClick = { vm.abrirChatboxDirecto() },
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                border = BorderStroke(1.5.dp, GradientPurpleStart.copy(alpha = 0.4f)),
+                shadowElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(LightPurple),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = null,
+                            tint = BrandPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Asistente Financiero IA",
+                            color = DarkBlue,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Consulta interactiva sobre métricas y rentabilidad",
+                            color = TextGray,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = BrandPurple
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(22.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "¿Cómo funciona nuestra inteligencia artificial?",
+                    color = BrandPurple,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { mostrarComoFunciona = true }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { vm.abrirHistorialAnalisis() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Schedule,
+                        contentDescription = null,
+                        tint = TextGray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (state.historialAnalisis.isNotEmpty()) {
+                            "Historial de informes (${state.historialAnalisis.size})"
+                        } else {
+                            "Historial de informes"
+                        },
+                        color = TextGray,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(90.dp))
         }
     }
 }
@@ -558,15 +557,17 @@ private fun AiEmbeddedChatView(
             .background(BgGray)
             .imePadding()
     ) {
-        Surface(
-            color = Color.White,
-            shadowElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = DarkBlue,
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+                .padding(top = 48.dp, bottom = 22.dp, start = 20.dp, end = 20.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 44.dp, bottom = 14.dp, start = 16.dp, end = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -577,38 +578,39 @@ private fun AiEmbeddedChatView(
                     Surface(
                         onClick = onBack,
                         shape = CircleShape,
-                        color = BgGray,
-                        modifier = Modifier.size(38.dp)
+                        color = Color.White.copy(alpha = 0.12f),
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                 contentDescription = "Volver",
-                                tint = DarkBlue,
-                                modifier = Modifier.size(22.dp)
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
+                    Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(
-                            text = "Chat de mi negocio",
-                            color = DarkBlue,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "ASISTENTE FINANCIERO",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Consultoría financiera asistida por IA",
-                            color = TextGray,
-                            fontSize = 12.sp
+                            text = "Chat de mi negocio",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(42.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(AiPurpleGradient),
                     contentAlignment = Alignment.Center
@@ -622,6 +624,7 @@ private fun AiEmbeddedChatView(
                 }
             }
         }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -661,6 +664,7 @@ private fun AiEmbeddedChatView(
                 }
             }
         }
+
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -748,6 +752,7 @@ private fun AiEmbeddedChatView(
                     }
                 }
             }
+
             if (mostrarMenuSugerencias) {
                 item {
                     Column(
@@ -848,6 +853,7 @@ private fun AiEmbeddedChatView(
                 }
             }
         }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -932,6 +938,7 @@ private fun AiEmbeddedChatView(
         }
     }
 }
+
 @Composable
 private fun AiAnalysisResultView(
     report: AiStructuredReport,
@@ -941,6 +948,7 @@ private fun AiAnalysisResultView(
 ) {
     val context = LocalContext.current
     var recomendacionDetalle by remember { mutableStateOf<AiRecommendation?>(null) }
+
     if (recomendacionDetalle != null) {
         val rec = recomendacionDetalle!!
         Dialog(onDismissRequest = { recomendacionDetalle = null }) {
@@ -1430,6 +1438,7 @@ private fun AiAnalysisResultView(
         }
     }
 }
+
 @Composable
 private fun AiAnalysisHistoryView(
     state: AiUiState,

@@ -3,6 +3,7 @@ package com.nerdsyntax.juntalucas.feature.auth.data
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
 import com.nerdsyntax.juntalucas.feature.auth.domain.model.AuthUser
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
@@ -66,6 +67,24 @@ class FirebaseAuthRepository(
 
     override suspend fun deleteCurrentUser(): Result<Unit> = runCatching {
         val user = firebaseAuth.currentUser ?: error("No existe una sesión activa.")
+        val uid = user.uid
+
+        val db = FirebaseFirestore.getInstance()
+        val userRef = db.collection("users").document(uid)
+
+        val subcolecciones = listOf("sales", "expenses", "products", "ai_history", "business")
+
+        for (coleccion in subcolecciones) {
+            val docs = userRef.collection(coleccion).get().await()
+            if (!docs.isEmpty) {
+                val batch = db.batch()
+                docs.forEach { batch.delete(it.reference) }
+                batch.commit().await()
+            }
+        }
+
+        userRef.delete().await()
+
         user.delete().await()
         _currentUser.value = null
     }

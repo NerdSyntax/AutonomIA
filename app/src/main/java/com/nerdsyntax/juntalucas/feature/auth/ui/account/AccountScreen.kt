@@ -236,7 +236,7 @@ fun AccountScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "ZONA DE PELIGRO",
+                text = "Eliminación de cuenta",
                 color = RedDanger.copy(alpha = 0.8f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,

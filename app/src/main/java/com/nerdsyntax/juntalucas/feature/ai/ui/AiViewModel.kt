@@ -92,7 +92,6 @@ class AiViewModel(
         val margenPct: Double?
     )
 
-    /** Un hallazgo calculado por código, con su impacto estimado en CLP al mes. La IA solo lo redacta. */
     private data class Hallazgo(
         val tema: String,
         val impactoClp: Long,
@@ -111,8 +110,8 @@ class AiViewModel(
     val uiState = _uiState.asStateFlow()
 
     // API KEY
-    // NO DEJAR LA KEY PUESTA AL SUBIR A GITHUB
-    private val groqApiKey = "".trim()
+    //no subir a github sin borrarla antes
+    private val groqApiKey = "API_KEY_AQUI".trim()
 
     private var currentUid: String? = null
     private var nombreUsuario: String = "Usuario"
@@ -203,30 +202,24 @@ class AiViewModel(
         gastosDetalle = emptyList()
         catalogoDetalle = emptyList()
         periodoDetalle = ""
+        val codigos = calcular12Periodos()
+        val labels = codigos.map { formatearCodigoAMesLegible(it) }
 
-        val (mesActualCodigo, mesAnteriorCodigo) = calcularPeriodos()
-
-        val mesActualLabel = formatearCodigoAMesLegible(mesActualCodigo)
-        val mesAnteriorLabel = formatearCodigoAMesLegible(mesAnteriorCodigo)
-
-        mapaPeriodos = mapOf(
-            mesActualLabel to mesActualCodigo,
-            mesAnteriorLabel to mesAnteriorCodigo
-        )
+        mapaPeriodos = labels.zip(codigos).toMap()
 
         _uiState.value = AiUiState(
             isLoadingData = uid != null,
             subScreen = AiSubScreen.HOME,
-            periodos = listOf(mesActualLabel, mesAnteriorLabel),
-            periodoSeleccionado = mesActualLabel,
-            periodoComparacion = mesAnteriorLabel,
+            periodos = labels,
+            periodoSeleccionado = labels[0],
+            periodoComparacion = labels.getOrNull(1) ?: labels[0],
             historialAnalisis = emptyList(),
             chatMessages = emptyList(),
             currentReport = null
         )
 
         if (uid != null) {
-            cargarDatosPeriodo(mesActualCodigo, uid)
+            cargarDatosPeriodo(codigos[0], uid)
             cargarHistorialDeFirebase(uid)
         }
     }
@@ -242,45 +235,41 @@ class AiViewModel(
         return uidActual
     }
 
-    /** Devuelve (código del mes actual, código del mes anterior), p. ej. ("2026-10", "2026-09"). */
-    private fun calcularPeriodos(): Pair<String, String> {
+    /** Calcula un año hacia atrás (12 periodos) */
+    private fun calcular12Periodos(): List<String> {
         val actual = runCatching { SaleDates.today().take(7) }.getOrElse { obtenerMesActualCodigo() }
-        val anterior = runCatching { SaleDates.shiftMonth(actual, -1) }.getOrElse { obtenerMesAnteriorCodigo() }
-        return actual to anterior
+        val periodos = mutableListOf(actual)
+        var current = actual
+        for (i in 1..11) {
+            current = runCatching { SaleDates.shiftMonth(current, -1) }.getOrElse { desplazarMesAnteriorManual(current) }
+            periodos.add(current)
+        }
+        return periodos
     }
 
-    /**
-     * Si cambió el mes con la app abierta (p. ej. pasamos de octubre a noviembre), el selector
-     * pasa a [mes nuevo, mes que acaba de terminar] y se recargan los datos del mes nuevo.
-     */
     private fun actualizarPeriodosSiCambioElMes() {
-        val (mesActualCodigo, mesAnteriorCodigo) = calcularPeriodos()
-        if (mapaPeriodos.values.firstOrNull() == mesActualCodigo) return
+        val codigos = calcular12Periodos()
+        if (mapaPeriodos.values.firstOrNull() == codigos[0]) return
 
-        val mesActualLabel = formatearCodigoAMesLegible(mesActualCodigo)
-        val mesAnteriorLabel = formatearCodigoAMesLegible(mesAnteriorCodigo)
-
-        mapaPeriodos = mapOf(
-            mesActualLabel to mesActualCodigo,
-            mesAnteriorLabel to mesAnteriorCodigo
-        )
+        val labels = codigos.map { formatearCodigoAMesLegible(it) }
+        mapaPeriodos = labels.zip(codigos).toMap()
 
         _uiState.update {
             it.copy(
-                periodos = listOf(mesActualLabel, mesAnteriorLabel),
-                periodoSeleccionado = mesActualLabel,
-                periodoComparacion = mesAnteriorLabel,
+                periodos = labels,
+                periodoSeleccionado = labels[0],
+                periodoComparacion = labels.getOrNull(1) ?: labels[0],
                 chatMessages = emptyList()
             )
         }
 
-        currentUid?.let { cargarDatosPeriodo(mesActualCodigo, it) }
+        currentUid?.let { cargarDatosPeriodo(codigos[0], it) }
     }
+
     fun abrirPantallaPrincipal() {
         actualizarPeriodosSiCambioElMes()
         _uiState.update { it.copy(subScreen = AiSubScreen.HOME) }
     }
-
 
     fun abrirHistorialAnalisis() {
         verificarCambioDeUsuario()
@@ -405,7 +394,19 @@ class AiViewModel(
     fun onPeriodoSelected(periodo: String) {
         val uid = verificarCambioDeUsuario()
         val codigo = mapaPeriodos[periodo] ?: return
-        _uiState.update { it.copy(periodoSeleccionado = periodo) }
+        val index = _uiState.value.periodos.indexOf(periodo)
+        val comparacionLabel = if (index != -1 && index + 1 < _uiState.value.periodos.size) {
+            _uiState.value.periodos[index + 1]
+        } else {
+            formatearCodigoAMesLegible(desplazarMesAnteriorManual(codigo))
+        }
+
+        _uiState.update {
+            it.copy(
+                periodoSeleccionado = periodo,
+                periodoComparacion = comparacionLabel
+            )
+        }
         cargarDatosPeriodo(codigo, uid)
     }
 
@@ -868,10 +869,6 @@ class AiViewModel(
         return listOf("business", "negocio", "empresa", "rubro").any { p.contains(it) }
     }
 
-    /**
-     * Busca nombre, negocio, rubro y meta mensual en las ubicaciones más probables de Firestore.
-     * Las lecturas independientes se hacen en paralelo, conservando el orden de prioridad original.
-     */
     private suspend fun obtenerPerfilCliente(uid: String?): Pair<String, String> {
         val repoUser = authRepository?.currentUser?.value
         val firebaseUser = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
@@ -973,7 +970,6 @@ class AiViewModel(
 
 
 
-    /** Agrupa por nombre normalizado y ordena por monto (y luego cantidad) de mayor a menor. */
     private fun agruparItems(pares: List<Pair<String, Long>>): List<ItemResumen> =
         pares
             .groupBy { it.first.trim().lowercase().replaceFirstChar { c -> c.uppercase() } }
@@ -1004,6 +1000,7 @@ class AiViewModel(
     private fun calcularAgrupacionGastos(gastosPares: List<Pair<String, Long>>) {
         listaGastosAgrupados = agruparItems(gastosPares)
     }
+
     private fun cargarHistorialDeFirebase(uid: String) {
         viewModelScope.launch {
             runCatching {
@@ -1071,7 +1068,7 @@ class AiViewModel(
 
                 _uiState.update { it.copy(historialAnalisis = items) }
             }.onFailure {
-                Log.e(TAG, "No se pudo leer el historial de Firestore (revisa las reglas de seguridad)", it)
+                Log.e(TAG, "No se pudo leer el historial de Firestore", it)
             }
         }
     }
@@ -1145,16 +1142,11 @@ class AiViewModel(
 
                 limpiarHistorialAntiguo(uid)
             }.onFailure {
-                Log.e(TAG, "No se pudo guardar el análisis en Firestore (revisa las reglas de seguridad)", it)
+                Log.e(TAG, "No se pudo guardar el análisis en Firestore", it)
             }
         }
     }
 
-    /**
-     * Deja en Firestore solo los últimos [MAX_HISTORIAL] análisis (por timestamp)
-     * y borra el resto en un solo batch. Si falla, solo se registra en Logcat:
-     * el análisis nuevo ya quedó guardado y la limpieza se reintenta en el siguiente.
-     */
     private suspend fun limpiarHistorialAntiguo(uid: String) {
         runCatching {
             val db = FirebaseFirestore.getInstance()
@@ -1414,11 +1406,6 @@ class AiViewModel(
 
     private fun numeroDe(doc: DocumentSnapshot, campo: String): Long? = (doc.get(campo) as? Number)?.toLong()
 
-    /**
-     * Lee ventas, gastos y catálogo directo de Firestore (con los nombres de campo de las reglas de seguridad)
-     * para el análisis avanzado: margen por producto, alertas, días de la semana, etc.
-     * Si algo falla, el análisis básico sigue funcionando con los datos de los repositorios.
-     */
     private suspend fun cargarDetalleAvanzado(uid: String, periodoCodigo: String, codigoAnterior: String) {
         val base = FirebaseFirestore.getInstance().collection("users").document(uid)
 
@@ -1493,7 +1480,6 @@ class AiViewModel(
             .getActualMaximum(Calendar.DAY_OF_MONTH)
     }
 
-    /** Cuántas veces ocurre cada día de la semana entre dos fechas (índice = Calendar.DAY_OF_WEEK, 1..7). */
     private fun contarDiasDeSemana(desde: String, hasta: String): IntArray {
         val conteo = IntArray(8)
         val cursor = fechaACalendar(desde) ?: return conteo
@@ -1512,7 +1498,6 @@ class AiViewModel(
     private fun gastosVariablesDelPeriodo(): Long =
         gastosDetalle.filter { it.fecha.startsWith(periodoDetalle) && it.tipo == "VARIABLE" }.sumOf { it.monto }
 
-    /** Ventas, utilidad y margen por producto. La utilidad solo existe si el producto tiene costo unitario cargado. */
     private fun rendimientoProductos(ventas: List<VentaDetalle>): List<ProductoRendimiento> {
         val costos = catalogoDetalle.associate { it.id to it.costoUnitario }
         return ventas
@@ -1521,7 +1506,7 @@ class AiViewModel(
                 val cantidad = lista.sumOf { it.cantidad }
                 val ingresos = lista.sumOf { it.total }
                 val costo = costos[clave]
-                val utilidad = costo?.let { ingresos - it * cantidad }
+                val utilidad = costo?.let { ingresos - (it * cantidad) }
                 ProductoRendimiento(
                     clave = clave,
                     nombre = lista.first().producto,
@@ -1533,10 +1518,6 @@ class AiViewModel(
             }
     }
 
-    /**
-     * Calcula todos los hallazgos del periodo seleccionado, ordenados por impacto estimado en CLP,
-     * y un bloque de contexto con las cifras exactas (para el análisis y para el chat).
-     */
     private fun calcularInsights(): Insights {
         val periodo = periodoDetalle
         if (periodo.isBlank()) return Insights("", emptyList())
@@ -1617,11 +1598,11 @@ class AiViewModel(
                     val cantidad = r.cantidad.coerceAtLeast(1)
                     val costoUnidad = (r.ingresos - (r.utilidad ?: 0L)) / cantidad
                     val precioActual = r.ingresos / cantidad
-                    val precioObjetivo = redondearArriba100((costoUnidad / (1.0 - MARGEN_OBJETIVO_PCT / 100.0)).toLong())
+                    val precioObjetivo = redondearArriba100((costoUnidad / (1.0 - (MARGEN_OBJETIVO_PCT / 100.0))).toLong())
                     val alza = precioObjetivo - precioActual
                     if (alza > 0L) Triple(r, precioObjetivo, alza) else null
                 }
-                .sortedByDescending { it.third * it.first.cantidad }
+                .sortedByDescending { (it.third * it.first.cantidad) }
                 .take(2)
                 .forEach { (r, precioObjetivo, alza) ->
                     val cantidad = r.cantidad.coerceAtLeast(1)
@@ -1676,7 +1657,8 @@ class AiViewModel(
         val fijos = gastosAct.filter { it.tipo == "FIXED" }.sumOf { it.monto }
         val variables = gastosAct.filter { it.tipo == "VARIABLE" }.sumOf { it.monto }
         if (fijos > 0L && ventasTot > 0L) {
-            val margenContribucion = 1.0 - variables.toDouble() / ventasTot
+            val margenContribucion = 1.0 - (variables.toDouble() / ventasTot)
+
             if (margenContribucion > 0.05) {
                 val equilibrio = (fijos / margenContribucion).toLong()
                 val pctEquilibrio = ventasTot * 100 / equilibrio.coerceAtLeast(1L)
@@ -1730,7 +1712,7 @@ class AiViewModel(
                 val subida = if (previo > 0L) alza * 100 / previo >= 25L else monto >= maxOf(20_000L, gastosTot * 15 / 100)
                 if (suficiente && subida) Triple(cat, monto, previo) else null
             }
-            .maxByOrNull { it.second - it.third }
+            .maxByOrNull { (it.second - it.third) }
             ?.let { (cat, monto, previo) ->
                 val alza = monto - previo
                 hallazgos.add(
@@ -1824,7 +1806,7 @@ class AiViewModel(
             if (promedios.size >= 4) {
                 val mejor = promedios.maxByOrNull { it.second }
                 val peor = promedios.minByOrNull { it.second }
-                if (mejor != null && peor != null && peor.second * 2 < mejor.second) {
+                if (mejor != null && peor != null && (peor.second * 2) < mejor.second) {
                     val nombreMejor = NOMBRES_DIAS[mejor.first]
                     val nombrePeor = NOMBRES_DIAS[peor.first]
                     val impacto = ((mejor.second - peor.second) * 0.3 * 4).toLong()
@@ -1870,7 +1852,6 @@ class AiViewModel(
         return Insights(contexto, hallazgos.sortedByDescending { it.impactoClp })
     }
 
-    /** Convierte los mejores hallazgos en 3 recomendaciones; completa con las plantillas básicas si faltan. */
     private fun recomendacionesDesdeHallazgos(
         hallazgos: List<Hallazgo>,
         relleno: List<AiRecommendation>
@@ -1897,10 +1878,6 @@ class AiViewModel(
         return desdeHallazgos + extra
     }
 
-    /**
-     * Simulador "¿y si...?": detecta en el mensaje del cliente un escenario (subir/bajar precios,
-     * reducir gastos o insumos, vender más) y lo calcula en código. Devuelve null si no detecta ninguno.
-     */
     private fun calcularSimulacion(preguntaRaw: String): String? {
         val ventas = totalVentasClp
         if (ventas <= 0L) return null
@@ -1956,7 +1933,7 @@ class AiViewModel(
             val ticket = ventas / _uiState.value.ventasRegistradas.coerceAtLeast(1)
             val ingresosExtra = n * ticket
             val gananciaTxt = if (variables > 0L) {
-                val contribucion = (1.0 - variables.toDouble() / ventas).coerceIn(0.0, 1.0)
+                val contribucion = (1.0 - (variables.toDouble() / ventas)).coerceIn(0.0, 1.0)
                 " y cerca de ${formatClp((ingresosExtra * contribucion).toLong())} de ganancia (después de tus gastos variables)"
             } else ""
             resultados.add(
@@ -1966,8 +1943,6 @@ class AiViewModel(
 
         return resultados.takeIf { it.isNotEmpty() }?.joinToString("\n")
     }
-
-    //  FECHAS
 
     private fun fechaActual(): String =
         SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
@@ -1980,7 +1955,6 @@ class AiViewModel(
     private fun obtenerMesAnteriorCodigo(): String =
         codigoMes(Calendar.getInstance().apply { add(Calendar.MONTH, -1) })
 
-    /** Mes anterior a un código "yyyy-MM" (respaldo si SaleDates.shiftMonth falla). */
     private fun desplazarMesAnteriorManual(periodoCodigo: String): String {
         val partes = periodoCodigo.split("-")
         val anio = partes.getOrNull(0)?.toIntOrNull() ?: 2026
@@ -2002,12 +1976,6 @@ class AiViewModel(
         return "$nombreMes $anio"
     }
 
-    //  IA
-
-    /**
-     * Sistema = persona + reglas + datos reales del cliente (se envía en cada consulta
-     * como mensaje de sistema, así el modelo no se sale del personaje).
-     */
     private fun construirSystemPrompt(
         periodo: String,
         cantVentas: Int,
@@ -2100,7 +2068,6 @@ class AiViewModel(
 
     private fun groqConfigurada(): Boolean = groqApiKey.isNotBlank() && !groqApiKey.startsWith("PEGA_AQUI")
 
-    /** Punto único de entrada a la IA. Devuelve null si falla (el llamador usa el fallback local). */
     private suspend fun consultarIA(
         systemPrompt: String,
         turnos: List<Pair<String, String>>,
@@ -2113,11 +2080,6 @@ class AiViewModel(
         return consultarGroq(systemPrompt, turnos, json)
     }
 
-    /**
-     * Groq usa el formato OpenAI /chat/completions.
-     * Prueba los modelos en orden; si uno falla (cuota, error, no disponible) sigue con el siguiente.
-     * Si la API key es inválida (HTTP 401) corta de inmediato: los demás modelos fallarían igual.
-     */
     private suspend fun consultarGroq(
         systemPrompt: String,
         turnos: List<Pair<String, String>>,
@@ -2126,7 +2088,6 @@ class AiViewModel(
         val limpios = normalizarTurnos(turnos)
         if (limpios.isEmpty()) return@withContext null
 
-        // RESPUESTA DEL MODELO SI LE PREGUNTAN SOBRE TENDENCIAS O DATOS DE INTERNET
         val notaAcceso = if (json) "" else
             "\n\nACCESO A INTERNET: no tienes acceso a internet en tiempo real. Si el cliente pide tendencias actuales, aclara en una frase que no puedes ver internet en vivo y entrega ideas basadas en conocimiento general del rubro, sin presentarlas como tendencias actuales verificadas."
 
@@ -2264,8 +2225,6 @@ class AiViewModel(
             _uiState.update { it.copy(chatMessages = it.chatMessages + iaMessage, isTyping = false) }
         }
     }
-
-    //  RESPALDO LOCAL SI LA IA NO RESPONDE
 
     private fun generarBienvenidaLocal(periodo: String, cantVentas: Int, cantGastos: Int, balance: Long): String {
         return if (cantVentas == 0 && cantGastos == 0) {
@@ -2466,9 +2425,8 @@ class AiViewModel(
     private companion object {
         const val TAG = "AutonomIA"
         const val GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+        const val MAX_HISTORIAL = 24
 
-        /** Cantidad máxima de análisis de IA que se conservan en el historial (Firestore y pantalla). */
-        const val MAX_HISTORIAL = 5
         const val MARGEN_OBJETIVO_PCT = 30.0
         const val MARGEN_MINIMO_PRODUCTO_PCT = 20.0
         const val COMISION_TARJETA_SUPUESTA = 0.02

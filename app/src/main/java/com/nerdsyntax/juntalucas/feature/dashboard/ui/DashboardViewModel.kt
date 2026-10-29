@@ -2,6 +2,7 @@ package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestore
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
@@ -15,6 +16,7 @@ import com.nerdsyntax.juntalucas.feature.movements.domain.ExpensesRepository
 import com.nerdsyntax.juntalucas.feature.movements.domain.Sale
 import com.nerdsyntax.juntalucas.feature.movements.domain.SalesRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -49,12 +51,11 @@ class DashboardViewModel(
                 .map { it?.uid }
                 .distinctUntilChanged()
                 .collectLatest { uid ->
-                    // Al cambiar de cuenta, reiniciamos también el periodo.
                     val initialSelection = currentMonthSelection()
                     periodSelection.value = initialSelection
 
                     _uiState.value = DashboardUiState(
-                        userName = userName(),
+                        userName = "Usuario",
                         selectedFilter = initialSelection.filter,
                         periodLabel = periodLabel(initialSelection),
                         customStart = initialSelection.start,
@@ -66,13 +67,16 @@ class DashboardViewModel(
                     if (uid == null) {
                         _uiState.update {
                             it.copy(
-                                errorMessage =
-                                    "Inicia sesión para ver tu negocio."
+                                errorMessage = "Inicia sesión para ver tu negocio."
                             )
                         }
                         return@collectLatest
                     }
-
+                    launch {
+                        observeUserName(uid).collect { name ->
+                            _uiState.update { it.copy(userName = name) }
+                        }
+                    }
                     combine(
                         periodSelection,
                         retry
@@ -83,6 +87,48 @@ class DashboardViewModel(
                     }
                 }
         }
+    }
+
+    /**
+     * Flujo reactivo que extrae y escucha el nombre del usuario desde Firestore y Auth.
+     */
+    private fun observeUserName(uid: String): Flow<String> = callbackFlow {
+        val authUser = authRepository.currentUser.value
+        val rawAuthName = authUser?.displayName ?: authUser?.email?.substringBefore("@")
+        val initialName = extraerPrimerNombre(rawAuthName) ?: "Usuario"
+
+        trySend(initialName)
+
+        val listener = FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(uid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && snapshot.exists()) {
+                    val rawFirestore = listOf("name", "nombre", "firstName", "fullName", "displayName", "userName")
+                        .firstNotNullOfOrNull { snapshot.getString(it) }
+
+                    val firestoreName = extraerPrimerNombre(rawFirestore)
+                    trySend(firestoreName ?: initialName)
+                }
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    /**
+     * Función robusta para limpiar el nombre extrayendo solo la primera palabra útil.
+     */
+    private fun extraerPrimerNombre(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val limpio = raw.trim()
+            .split(Regex("[\\s._0-9-]+"))
+            .firstOrNull { it.length >= 2 && it.lowercase() !in setOf("el", "la", "los", "las", "de", "del", "mi", "usuario") }
+            ?: return null
+        return limpio.lowercase().replaceFirstChar { it.uppercase() }
     }
 
     fun refresh() {
@@ -114,9 +160,12 @@ class DashboardViewModel(
     }
 
     /**
-     * Aplica el filtro y sus fechas en una sola actualización.
-     * start y end usan formato yyyy-MM-dd.
-     * end es inclusivo: ese día también se consulta.
+    - Aplica el filtro y sus fechas en una sola actualización.
+
+    - start y end usan formato yyyy-MM-dd.
+
+    - end es inclusivo: ese día también se consulta.
+
      */
     fun applyPeriod(
         selected: DashboardPeriodFilter,
@@ -176,8 +225,6 @@ class DashboardViewModel(
         periodSelection.value = normalized
     }
 
-    // Conservados para que las referencias antiguas sigan compilando.
-    // El diálogo nuevo confirma las dos fechas mediante applyPeriod.
     fun onCustomStart(value: String) {
         _uiState.update {
             it.copy(customStart = value)
@@ -199,13 +246,6 @@ class DashboardViewModel(
             start = first.toString(),
             end = first.plusMonths(1).minusDays(1).toString()
         )
-    }
-
-    private fun userName(): String {
-        return authRepository.currentUser.value
-            ?.displayName
-            ?.takeIf { it.isNotBlank() }
-            ?: "Usuario"
     }
 
     private fun resolveRange(
@@ -338,11 +378,8 @@ class DashboardViewModel(
                 )
             }
 
-            // La meta mensual sigue correspondiendo al mes actual.
             val currentMonthRange = DashboardPeriods.monthRange()
 
-            // Indicadores, gráficos y distribuciones:
-            // todos consultan el periodo seleccionado.
             val periodData = combine(
                 salesSource.observeRange(
                     uid,
@@ -579,7 +616,6 @@ class DashboardViewModel(
 
         _uiState.update {
             it.copy(
-                userName = userName(),
                 nombreNegocio = business?.nombreNegocio.orEmpty(),
                 metaMensual = business?.metaMensual ?: 0L,
                 ventasTotales = salesTotal,
@@ -587,15 +623,10 @@ class DashboardViewModel(
                         sale -> sale.draft.total
                 },
                 gastosTotales = expensesTotal,
-
-                // Campos antiguos: representan ventas menos gastos.
                 ganancia = balance,
                 balanceMovimientos = balance,
-
-                // Ganancia bruta: usa el costo histórico vendido.
                 gananciaBruta = grossProfit,
                 margen = margin,
-
                 movimientosRecientes = recent,
                 selectedFilter = selection.filter,
                 periodLabel = periodLabel(selection),
