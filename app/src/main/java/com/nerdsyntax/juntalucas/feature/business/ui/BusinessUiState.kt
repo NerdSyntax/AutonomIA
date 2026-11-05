@@ -1,6 +1,9 @@
 package com.nerdsyntax.juntalucas.feature.business.ui
 
-enum class BusinessTab { PRODUCTOS, INFORMACION }
+enum class BusinessTab {
+    PRODUCTOS,
+    INFORMACION
+}
 
 data class ProductItem(
     val id: String,
@@ -10,7 +13,10 @@ data class ProductItem(
     val cost: String,
     val margin: String,
     val stock: String,
-    val active: Boolean = true
+    val active: Boolean = true,
+    val stockMinimum: String = "",
+    val lowStock: Boolean = false,
+    val outOfStock: Boolean = false
 )
 
 data class BusinessUiState(
@@ -39,5 +45,7 @@ data class BusinessUiState(
     val comuna: String = "",
     val metaMensual: String = "",
     val moneda: String = "Peso chileno (CLP)",
-    val registro: String = ""
+    val registro: String = "",
+
+    val stockAlerts: List<ProductItem> = emptyList()
 )

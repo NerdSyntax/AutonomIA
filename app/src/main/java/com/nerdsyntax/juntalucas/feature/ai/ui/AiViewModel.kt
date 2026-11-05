@@ -111,7 +111,7 @@ class AiViewModel(
 
     // API KEY
     //no subir a github sin borrarla antes
-    private val groqApiKey = "API_KEY_AQUI".trim()
+    private val groqApiKey = "".trim()
 
     private var currentUid: String? = null
     private var nombreUsuario: String = "Usuario"

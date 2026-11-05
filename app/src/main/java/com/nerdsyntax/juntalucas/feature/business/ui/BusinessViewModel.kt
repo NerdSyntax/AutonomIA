@@ -7,6 +7,7 @@ import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.*
 import com.nerdsyntax.juntalucas.feature.movements.domain.*
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -16,36 +17,89 @@ class BusinessViewModel(
     private val catalogRepository: CatalogRepository,
     private val salesRepository: SalesRepository
 ) : ViewModel() {
+
     private val retry = MutableStateFlow(0)
+
     private var allProducts = emptyList<CatalogProduct>()
     private var business: Business? = null
     private var monthlySales = emptyList<Sale>()
     private var loadError: String? = null
     private var loading = true
+
     private val _uiState = MutableStateFlow(BusinessUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            auth.currentUser.map { it?.uid }.distinctUntilChanged().combine(retry) { uid, _ -> uid }
+            auth.currentUser
+                .map { it?.uid }
+                .distinctUntilChanged()
+                .combine(retry) { uid, _ -> uid }
                 .collectLatest { uid ->
-                    allProducts = emptyList(); business = null; monthlySales = emptyList(); loadError = null
-                    loading = uid != null; render()
-                    if (uid == null) { loadError = "Inicia sesión para ver tu negocio."; loading = false; render(); return@collectLatest }
-                    launch {
-                        businessRepository.getBusiness().fold({ business = it }, { loadError = it.salesUserMessage() })
+                    allProducts = emptyList()
+                    business = null
+                    monthlySales = emptyList()
+                    loadError = null
+                    loading = uid != null
+
+                    render()
+
+                    if (uid == null) {
+                        loadError = "Inicia sesión para ver tu negocio."
+                        loading = false
                         render()
+                        return@collectLatest
                     }
-                    launch {
-                        catalogRepository.observeAll(uid).collect { result ->
-                            result.fold({ allProducts = it.value }, { loadError = it.salesUserMessage() })
-                            loading = false; render()
-                        }
-                    }
-                    launch {
-                        salesRepository.observeMonth(uid, SaleDates.today().take(7)).collect { result ->
-                            result.fold({ monthlySales = it.value }, { loadError = it.salesUserMessage() })
+
+                    // Cancela estas observaciones al cambiar de usuario
+                    // o al solicitar un nuevo intento.
+                    coroutineScope {
+                        launch {
+                            businessRepository.getBusiness().fold(
+                                onSuccess = {
+                                    business = it
+                                },
+                                onFailure = {
+                                    loadError = it.salesUserMessage()
+                                }
+                            )
+
                             render()
+                        }
+
+                        launch {
+                            catalogRepository.observeAll(uid).collect { result ->
+                                result.fold(
+                                    onSuccess = {
+                                        allProducts = it.value
+                                    },
+                                    onFailure = {
+                                        loadError = it.salesUserMessage()
+                                    }
+                                )
+
+                                loading = false
+                                render()
+                            }
+                        }
+
+                        launch {
+                            val currentMonth = SaleDates.today().take(7)
+
+                            salesRepository
+                                .observeMonth(uid, currentMonth)
+                                .collect { result ->
+                                    result.fold(
+                                        onSuccess = {
+                                            monthlySales = it.value
+                                        },
+                                        onFailure = {
+                                            loadError = it.salesUserMessage()
+                                        }
+                                    )
+
+                                    render()
+                                }
                         }
                     }
                 }
@@ -53,47 +107,136 @@ class BusinessViewModel(
     }
 
     fun onTabSelected(tab: BusinessTab) {
-        _uiState.update { it.copy(selectedTab = tab) }
-        if (tab == BusinessTab.INFORMACION && !_uiState.value.isEditingBusiness) refreshBusiness()
-    }
-    fun onSearchChange(query: String) { _uiState.update { it.copy(searchQuery = query) }; render() }
-    fun onFilterSelected(filter: String) { _uiState.update { it.copy(selectedFilter = filter) }; render() }
-    fun retry() { retry.value += 1 }
-    fun startEditingBusiness() { _uiState.update { it.copy(isEditingBusiness = true, errorMessage = null) } }
+        _uiState.update {
+            it.copy(selectedTab = tab)
+        }
 
-    fun cancelEditingBusiness() {
-        _uiState.update { it.copy(isEditingBusiness = false, errorMessage = null) }
+        if (
+            tab == BusinessTab.INFORMACION &&
+            !_uiState.value.isEditingBusiness
+        ) {
+            refreshBusiness()
+        }
+    }
+
+    fun onSearchChange(query: String) {
+        _uiState.update {
+            it.copy(searchQuery = query)
+        }
+
         render()
     }
 
-    fun onBusinessNameChange(value: String) { _uiState.update { it.copy(businessName = value) } }
-    fun onBusinessRubroChange(value: String) { _uiState.update { it.copy(rubro = value) } }
-    fun onBusinessRegionChange(value: String) { _uiState.update { it.copy(region = value) } }
-    fun onBusinessComunaChange(value: String) { _uiState.update { it.copy(comuna = value) } }
-    fun onBusinessMetaChange(value: String) { _uiState.update { it.copy(metaMensual = value.filter { c -> c.isDigit() }.take(12)) } }
+    fun onFilterSelected(filter: String) {
+        _uiState.update {
+            it.copy(selectedFilter = filter)
+        }
+
+        render()
+    }
+
+    fun retry() {
+        retry.value += 1
+    }
+
+    fun startEditingBusiness() {
+        _uiState.update {
+            it.copy(
+                isEditingBusiness = true,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun cancelEditingBusiness() {
+        _uiState.update {
+            it.copy(
+                isEditingBusiness = false,
+                errorMessage = null
+            )
+        }
+
+        render()
+    }
+
+    fun onBusinessNameChange(value: String) {
+        _uiState.update {
+            it.copy(businessName = value)
+        }
+    }
+
+    fun onBusinessRubroChange(value: String) {
+        _uiState.update {
+            it.copy(rubro = value)
+        }
+    }
+
+    fun onBusinessRegionChange(value: String) {
+        _uiState.update {
+            it.copy(region = value)
+        }
+    }
+
+    fun onBusinessComunaChange(value: String) {
+        _uiState.update {
+            it.copy(comuna = value)
+        }
+    }
+
+    fun onBusinessMetaChange(value: String) {
+        _uiState.update {
+            it.copy(
+                metaMensual = value
+                    .filter { character -> character.isDigit() }
+                    .take(12)
+            )
+        }
+    }
 
     fun saveBusiness() {
         val state = _uiState.value
+
         if (state.isSavingBusiness) return
 
         val nombre = state.businessName.trim()
-        val meta = state.metaMensual.filter { it.isDigit() }.toLongOrNull() ?: 0L
+
+        val meta = state.metaMensual
+            .filter { it.isDigit() }
+            .toLongOrNull()
+            ?: 0L
+
         if (nombre.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "Ingresa el nombre de tu negocio.") }
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Ingresa el nombre de tu negocio."
+                )
+            }
+
             return
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isSavingBusiness = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isSavingBusiness = true,
+                    errorMessage = null
+                )
+            }
 
-            val base = businessRepository.getBusiness().getOrNull() ?: business
+            val base = businessRepository
+                .getBusiness()
+                .getOrNull()
+                ?: business
+
             if (base == null) {
                 _uiState.update {
                     it.copy(
                         isSavingBusiness = false,
-                        errorMessage = "No se pudieron cargar los datos de tu negocio. Inténtalo de nuevo."
+                        errorMessage = "No se pudieron cargar los datos " +
+                                "de tu negocio. Inténtalo de nuevo."
                     )
                 }
+
                 return@launch
             }
 
@@ -106,12 +249,26 @@ class BusinessViewModel(
             )
 
             businessRepository.saveBusiness(actualizado).fold(
-                {
+                onSuccess = {
                     business = actualizado
-                    _uiState.update { it.copy(isSavingBusiness = false, isEditingBusiness = false) }
+
+                    _uiState.update {
+                        it.copy(
+                            isSavingBusiness = false,
+                            isEditingBusiness = false
+                        )
+                    }
+
                     render()
                 },
-                { error -> _uiState.update { it.copy(isSavingBusiness = false, errorMessage = error.salesUserMessage()) } }
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isSavingBusiness = false,
+                            errorMessage = error.salesUserMessage()
+                        )
+                    }
+                }
             )
         }
     }
@@ -128,48 +285,221 @@ class BusinessViewModel(
     }
 
     fun toggleActive(productId: String) {
-        val product = allProducts.firstOrNull { it.id == productId } ?: return
+        val product = allProducts.firstOrNull {
+            it.id == productId
+        } ?: return
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            catalogRepository.update(product.copy(active = !product.active)).fold(
-                { retry() },
-                { error -> _uiState.update { it.copy(isLoading = false, errorMessage = error.salesUserMessage()) } }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null
+                )
+            }
+
+            catalogRepository.update(
+                product.copy(active = !product.active)
+            ).fold(
+                onSuccess = {
+                    retry()
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = error.salesUserMessage()
+                        )
+                    }
+                }
             )
         }
+    }
+
+    private fun needsStockAlert(product: CatalogProduct): Boolean {
+        return product.isProduct &&
+                !product.isAsset &&
+                product.active &&
+                product.trackStock &&
+                product.stock <= product.stockMinimum
+    }
+
+    private fun toProductItem(product: CatalogProduct): ProductItem {
+        val lowStock = needsStockAlert(product)
+
+        val margin = product.unitCost?.let { cost ->
+            if (product.price > 0L) {
+                val percentage =
+                    (product.price - cost).toDouble() /
+                            product.price * 100
+
+                "${percentage.toInt()}%"
+            } else {
+                "—"
+            }
+        } ?: "—"
+
+        val unit = product.unit.ifBlank { "unidad" }
+
+        return ProductItem(
+            id = product.id,
+            name = product.name,
+            type = when {
+                product.isAsset -> "Activo"
+                product.isProduct -> "Producto"
+                else -> "Servicio"
+            },
+            price = formatClp(product.price),
+            cost = product.unitCost?.let(::formatClp) ?: "—",
+            margin = margin,
+            stock = if (product.isProduct && product.trackStock) {
+                "${product.stock} $unit"
+            } else {
+                "—"
+            },
+            active = product.active,
+            stockMinimum = "${product.stockMinimum} $unit",
+            lowStock = lowStock,
+            outOfStock = lowStock && product.stock == 0L
+        )
     }
 
     private fun render() {
         val state = _uiState.value
         val query = state.searchQuery.trim()
+
         val visible = allProducts.filter { product ->
-            (state.selectedFilter == "Todos" ||
-                    (state.selectedFilter == "Productos" && product.isProduct && !product.isAsset) ||
-                    (state.selectedFilter == "Servicios" && !product.isProduct && !product.isAsset) ||
-                    (state.selectedFilter == "Activos" && product.isAsset)) &&
-                    (query.isBlank() || product.name.contains(query, true) || product.category.contains(query, true))
-        }.sortedBy { it.name.lowercase() }
+            val matchesFilter = when (state.selectedFilter) {
+                "Todos" -> true
+
+                "Productos" ->
+                    product.isProduct && !product.isAsset
+
+                "Servicios" ->
+                    !product.isProduct && !product.isAsset
+
+                "Activos" ->
+                    product.isAsset
+
+                "Stock bajo" ->
+                    needsStockAlert(product)
+
+                else -> true
+            }
+
+            val matchesQuery = query.isBlank() ||
+                    product.name.contains(
+                        query,
+                        ignoreCase = true
+                    ) ||
+                    product.category.contains(
+                        query,
+                        ignoreCase = true
+                    )
+
+            matchesFilter && matchesQuery
+        }.sortedBy {
+            it.name.lowercase()
+        }
+
+        // Incluye todas las alertas, independientemente
+        // de la búsqueda o del filtro del catálogo.
+        val stockAlerts = allProducts
+            .filter(::needsStockAlert)
+            .map(::toProductItem)
+            .sortedWith(
+                compareBy<ProductItem> { !it.outOfStock }
+                    .thenBy { it.name.lowercase() }
+            )
+
         val goal = business?.metaMensual ?: 0L
         val total = monthlySales.sumOf { it.draft.total }
-        val percentage = if (goal > 0) (total.toDouble() / goal).coerceIn(0.0, 1.0).toFloat() else 0f
-        val activity = business?.tipoActividad.orEmpty().replaceFirstChar { it.uppercase() }
+
+        val percentage = if (goal > 0L) {
+            (total.toDouble() / goal)
+                .coerceIn(0.0, 1.0)
+                .toFloat()
+        } else {
+            0f
+        }
+
+        val activity = business?.tipoActividad
+            .orEmpty()
+            .replaceFirstChar { it.uppercase() }
+
         _uiState.value = state.copy(
-            products = visible.map { product ->
-                val margin = product.unitCost?.let { cost -> if (product.price > 0) "${((product.price - cost).toDouble() / product.price * 100).toInt()}%" else "—" } ?: "—"
-                ProductItem(product.id, product.name, when { product.isAsset -> "Activo"; product.isProduct -> "Producto"; else -> "Servicio" },
-                    formatClp(product.price), product.unitCost?.let(::formatClp) ?: "—", margin,
-                    if (product.trackStock) "${product.stock} ${product.unit}" else "—", product.active)
+            products = visible.map(::toProductItem),
+            stockAlerts = stockAlerts,
+            isLoading = loading,
+            errorMessage = loadError,
+
+            businessName = if (state.isEditingBusiness) {
+                state.businessName
+            } else {
+                business?.nombreNegocio.orEmpty()
             },
-            isLoading = loading, errorMessage = loadError, businessName = if (state.isEditingBusiness) state.businessName else business?.nombreNegocio.orEmpty(),
-            businessDetails = listOf(business?.rubro, business?.region, business?.comuna).filter { !it.isNullOrBlank() }.joinToString(" · "),
-            productCount = allProducts.count { it.isProduct && !it.isAsset }.toString(),
-            serviceCount = allProducts.count { !it.isProduct && !it.isAsset }.toString(),
-            assetCount = allProducts.count { it.isAsset }.toString(), goalTotal = formatClp(goal),
-            goalProgressText = "${formatClp(total)} alcanzados este mes (${(percentage * 100).toInt()}%)", goalPercentage = percentage,
-            rubro = if (state.isEditingBusiness) state.rubro else business?.rubro.orEmpty(), actividad = activity,
-            region = if (state.isEditingBusiness) state.region else business?.region.orEmpty(),
-            comuna = if (state.isEditingBusiness) state.comuna else business?.comuna.orEmpty(),
-            metaMensual = if (state.isEditingBusiness) state.metaMensual else business?.metaMensual?.takeIf { it > 0L }?.toString().orEmpty(),
-            registro = if (business != null) "Configurado" else ""
+
+            businessDetails = listOf(
+                business?.rubro,
+                business?.region,
+                business?.comuna
+            ).filter {
+                !it.isNullOrBlank()
+            }.joinToString(" · "),
+
+            productCount = allProducts.count {
+                it.isProduct && !it.isAsset
+            }.toString(),
+
+            serviceCount = allProducts.count {
+                !it.isProduct && !it.isAsset
+            }.toString(),
+
+            assetCount = allProducts.count {
+                it.isAsset
+            }.toString(),
+
+            goalTotal = formatClp(goal),
+
+            goalProgressText =
+                "${formatClp(total)} alcanzados este mes " +
+                        "(${(percentage * 100).toInt()}%)",
+
+            goalPercentage = percentage,
+
+            rubro = if (state.isEditingBusiness) {
+                state.rubro
+            } else {
+                business?.rubro.orEmpty()
+            },
+
+            actividad = activity,
+
+            region = if (state.isEditingBusiness) {
+                state.region
+            } else {
+                business?.region.orEmpty()
+            },
+
+            comuna = if (state.isEditingBusiness) {
+                state.comuna
+            } else {
+                business?.comuna.orEmpty()
+            },
+
+            metaMensual = if (state.isEditingBusiness) {
+                state.metaMensual
+            } else {
+                business?.metaMensual
+                    ?.takeIf { it > 0L }
+                    ?.toString()
+                    .orEmpty()
+            },
+
+            registro = if (business != null) {
+                "Configurado"
+            } else {
+                ""
+            }
         )
     }
 }
