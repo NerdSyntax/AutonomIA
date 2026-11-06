@@ -84,7 +84,17 @@ private val AiPurpleGradient = Brush.horizontalGradient(
 fun AiScreen(
     state: AiUiState,
     vm: AiViewModel,
+    onToggleBottomBar: (Boolean) -> Unit = {}
 ) {
+    LaunchedEffect(state.subScreen, state.isAnalyzing) {
+        val shouldShowBar = state.subScreen == AiSubScreen.HOME && !state.isAnalyzing
+        onToggleBottomBar(shouldShowBar)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { onToggleBottomBar(true) }
+    }
+
     if (state.isAnalyzing) {
         BackHandler(enabled = true) {}
         AiLoadingScreen(state = state)
@@ -858,7 +868,7 @@ private fun AiEmbeddedChatView(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(BgGray)
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 84.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
@@ -1434,7 +1444,7 @@ private fun AiAnalysisResultView(
                 }
             }
 
-            Spacer(modifier = Modifier.height(90.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -1683,10 +1693,11 @@ private fun AiAnalysisHistoryView(
                 }
             }
 
-            Spacer(modifier = Modifier.height(90.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
+
 @Composable
 private fun KpiStatPill(
     modifier: Modifier = Modifier,
@@ -2309,6 +2320,7 @@ private fun PasoExplicacionItem(
         }
     }
 }
+
 private fun formatAiStructuredMessage(rawText: String): AnnotatedString {
     return buildAnnotatedString {
         val cleanText = rawText.replace("**", "")

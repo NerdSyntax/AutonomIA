@@ -46,9 +46,17 @@ fun AppNavigation() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    var showBottomBar by remember { mutableStateOf(true) }
+
     val startDestination = Routes.SPLASH
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { sessionViewModel.refreshBusiness() }
+
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != Routes.AI && currentRoute != Routes.AI_CHAT) {
+            showBottomBar = true
+        }
+    }
 
     LaunchedEffect(session, currentRoute) {
         if (currentRoute == null || currentRoute == Routes.SPLASH) return@LaunchedEffect
@@ -59,7 +67,7 @@ fun AppNavigation() {
 
     Scaffold(
         bottomBar = {
-            if (session.canAccessDashboard && currentRoute in bottomRoutes) {
+            if (session.canAccessDashboard && currentRoute in bottomRoutes && showBottomBar) {
                 AppBottomNavigation(currentRoute, navController::navigateToBottomRoute)
             }
         }
@@ -362,7 +370,8 @@ fun AppNavigation() {
 
                 AiScreen(
                     state = state,
-                    vm = vm
+                    vm = vm,
+                    onToggleBottomBar = { showBottomBar = it }
                 )
             }
 
@@ -375,7 +384,8 @@ fun AppNavigation() {
 
                 AiScreen(
                     state = state,
-                    vm = vm
+                    vm = vm,
+                    onToggleBottomBar = { showBottomBar = it }
                 )
             }
 
