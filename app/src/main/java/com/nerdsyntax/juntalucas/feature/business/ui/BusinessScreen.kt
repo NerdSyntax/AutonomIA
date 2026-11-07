@@ -1,6 +1,8 @@
 package com.nerdsyntax.juntalucas.feature.business.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.clip
+import com.nerdsyntax.juntalucas.feature.business.ui.product.StoredProductPhoto
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -482,10 +484,7 @@ private fun ProductsTabContent(
             value = state.searchQuery,
             onValueChange = onSearchChange,
             placeholder = {
-                Text(
-                    text = "Buscar productos o servicios...",
-                    color = TextMuted
-                )
+                Text("Buscar productos o servicios...", color = TextMuted)
             },
             leadingIcon = {
                 Icon(
@@ -517,21 +516,14 @@ private fun ProductsTabContent(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf(
-                "Todos",
-                "Productos",
-                "Servicios",
-                "Activos",
-                "Stock bajo"
-            ).forEach { filter ->
-                FilterPill(
-                    text = filter,
-                    isSelected = state.selectedFilter == filter,
-                    onClick = {
-                        onFilterSelected(filter)
-                    }
-                )
-            }
+            listOf("Todos", "Productos", "Servicios", "Activos", "Stock bajo")
+                .forEach { filter ->
+                    FilterPill(
+                        text = filter,
+                        isSelected = state.selectedFilter == filter,
+                        onClick = { onFilterSelected(filter) }
+                    )
+                }
         }
 
         Spacer(modifier = Modifier.height(18.dp))
@@ -551,9 +543,7 @@ private fun ProductsTabContent(
         state.errorMessage?.let { message ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = RedBg
-                ),
+                colors = CardDefaults.cardColors(containerColor = RedBg),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -581,41 +571,27 @@ private fun ProductsTabContent(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
-        if (
-            !state.isLoading &&
-            state.errorMessage == null &&
-            state.products.isEmpty()
-        ) {
+        if (!state.isLoading && state.errorMessage == null && state.products.isEmpty()) {
             val hasSearch = state.searchQuery.isNotBlank()
 
             val title = when {
                 hasSearch -> "Sin resultados"
-                state.selectedFilter == "Stock bajo" ->
-                    "Inventario sin alertas"
-                state.selectedFilter != "Todos" ->
-                    "Sin resultados"
+                state.selectedFilter == "Stock bajo" -> "Inventario sin alertas"
+                state.selectedFilter != "Todos" -> "Sin resultados"
                 else -> "Tu catálogo está vacío"
             }
 
             val message = when {
-                hasSearch ->
-                    "No encontramos productos con esa búsqueda."
-
+                hasSearch -> "No encontramos productos con esa búsqueda."
                 state.selectedFilter == "Stock bajo" ->
                     "No hay productos activos que requieran reposición."
-
                 state.selectedFilter != "Todos" ->
                     "No hay registros para este filtro."
-
                 else ->
-                    "Agrega tus productos o servicios para " +
-                            "registrar ventas y ver tu margen."
+                    "Agrega tus productos o servicios para registrar ventas y ver tu margen."
             }
 
-            EmptyCatalogCard(
-                title = title,
-                message = message
-            )
+            EmptyCatalogCard(title = title, message = message)
         }
 
         state.products.forEach { product ->
@@ -623,25 +599,17 @@ private fun ProductsTabContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
-                    .alpha(
-                        if (product.active) 1f else 0.65f
-                    ),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                ),
+                    .alpha(if (product.active) 1f else 0.65f),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 1.dp
-                )
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = product.name,
                                 fontWeight = FontWeight.Bold,
@@ -649,15 +617,25 @@ private fun ProductsTabContent(
                                 fontSize = 16.sp
                             )
 
-                            Spacer(
-                                modifier = Modifier.height(6.dp)
-                            )
+                            product.photoStoragePath
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { path ->
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    StoredProductPhoto(
+                                        path = path,
+                                        description = "Foto de ${product.name}",
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                    )
+                                }
+
+                            Spacer(modifier = Modifier.height(6.dp))
 
                             Row(
-                                horizontalArrangement =
-                                    Arrangement.spacedBy(6.dp),
-                                verticalAlignment =
-                                    Alignment.CenterVertically
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 TypeBadge(product.type)
 
@@ -667,9 +645,7 @@ private fun ProductsTabContent(
                             }
 
                             if (product.lowStock) {
-                                Spacer(
-                                    modifier = Modifier.height(8.dp)
-                                )
+                                Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
                                     text = if (product.outOfStock) {
@@ -686,23 +662,16 @@ private fun ProductsTabContent(
 
                         ProductActionsMenu(
                             isActive = product.active,
-                            onEdit = {
-                                onEditProduct(product.id)
-                            },
-                            onToggleActive = {
-                                onDeactivateProduct(product.id)
-                            }
+                            onEdit = { onEditProduct(product.id) },
+                            onToggleActive = { onDeactivateProduct(product.id) }
                         )
                     }
 
-                    Spacer(
-                        modifier = Modifier.height(14.dp)
-                    )
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement =
-                            Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         MetricTile(
                             label = "Precio venta",
@@ -731,16 +700,8 @@ private fun ProductsTabContent(
                         MetricTile(
                             label = "Stock",
                             value = product.stock,
-                            color = if (product.lowStock) {
-                                RedText
-                            } else {
-                                BlueText
-                            },
-                            background = if (product.lowStock) {
-                                RedBg
-                            } else {
-                                BlueBg
-                            },
+                            color = if (product.lowStock) RedText else BlueText,
+                            background = if (product.lowStock) RedBg else BlueBg,
                             modifier = Modifier.weight(1f)
                         )
                     }

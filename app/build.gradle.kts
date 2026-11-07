@@ -40,7 +40,8 @@ android {
 }
 
 dependencies {
-
+    implementation("com.google.firebase:firebase-storage")
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
 

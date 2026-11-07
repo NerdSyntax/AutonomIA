@@ -1,6 +1,25 @@
 package com.nerdsyntax.juntalucas.feature.business.ui.product
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.os.Build
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,11 +39,18 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import kotlin.math.abs
@@ -59,6 +85,7 @@ fun AddProductScreen(
     onUnidadChange: (String) -> Unit = {},
     onIsActiveChange: (Boolean) -> Unit,
     onSave: () -> Unit,
+    onPhotoChange: (String?) -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val symbols = DecimalFormatSymbols().apply { groupingSeparator = '.' }
@@ -122,6 +149,14 @@ fun AddProductScreen(
                     TypePill("Servicio", Icons.Default.Settings, !state.isProduct, Modifier.weight(1f)) { onIsProductChange(false) }
                 }
             }
+
+            ProductPhotoCard(
+                isProduct = state.isProduct,
+                enabled = !state.isSaving,
+                selectedPhoto = state.selectedPhotoUri,
+                storedPhotoPath = state.storedPhotoPath.takeUnless { state.removeStoredPhoto },
+                onPhotoChange = onPhotoChange
+            )
 
             FormCard(title = "Información básica") {
                 ProductField(
@@ -301,6 +336,258 @@ fun AddProductScreen(
     }
 }
 //  COMPONENTES
+@Composable
+private fun ProductPhotoCard(
+    isProduct: Boolean,
+    enabled: Boolean,
+    selectedPhoto: String?,
+    storedPhotoPath: String?,
+    onPhotoChange: (String?) -> Unit
+) {
+    val itemLabel = if (isProduct) "producto" else "servicio"
+    val context = LocalContext.current
+    var pendingCapture by rememberSaveable { mutableStateOf<String?>(null) }
+    var photoError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun replacePhoto(newPhoto: Uri?) {
+        val newValue = newPhoto?.toString()
+        onPhotoChange(newValue)
+        photoError = null
+        if (selectedPhoto != newValue) {
+            deleteTemporaryProductPhoto(context, selectedPhoto)
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) replacePhoto(uri)
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { saved ->
+        val captured = pendingCapture
+        pendingCapture = null
+        if (saved && captured != null) {
+            replacePhoto(Uri.parse(captured))
+        } else {
+            deleteTemporaryProductPhoto(context, captured)
+        }
+    }
+
+    val photo = selectedPhoto
+    val canSelect = enabled && pendingCapture == null
+
+    FormCard(title = "Foto del $itemLabel (opcional)") {
+        if (photo == null && storedPhotoPath != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(LightBg),
+                contentAlignment = Alignment.Center
+            ) {
+                StoredProductPhoto(
+                    path = storedPhotoPath,
+                    description = "Foto guardada del $itemLabel",
+                    modifier = Modifier.fillMaxSize(),
+                    fallback = {
+                        Text(
+                            text = "Foto guardada del $itemLabel",
+                            color = TextGray,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                )
+            }
+        } else if (photo == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(PurpleBg, RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Agrega una foto para identificar tu $itemLabel", color = PurpleText)
+            }
+        } else {
+            key(photo) {
+                ProductPhotoPreview(
+                    uri = Uri.parse(photo),
+                    description = "Vista previa de la foto del $itemLabel"
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = {
+                    photoError = null
+                    runCatching {
+                        galleryLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }.onFailure {
+                        photoError = "No se pudo abrir la galería."
+                    }
+                },
+                enabled = canSelect,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = PurpleText)
+            ) {
+                Text("Galería")
+            }
+
+            OutlinedButton(
+                onClick = {
+                    photoError = null
+                    runCatching {
+                        val capture = createProductPhotoUri(context)
+                        pendingCapture = capture.toString()
+                        cameraLauncher.launch(capture)
+                    }.onFailure {
+                        deleteTemporaryProductPhoto(context, pendingCapture)
+                        pendingCapture = null
+                        photoError = "No se pudo abrir la cámara. Puedes usar la galería."
+                    }
+                },
+                enabled = canSelect,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = PurpleText)
+            ) {
+                Text("Cámara")
+            }
+        }
+
+        if (photo != null || storedPhotoPath != null) {
+            TextButton(
+                onClick = { replacePhoto(null) },
+                enabled = canSelect
+            ) {
+                Text("Quitar foto", color = RedText)
+            }
+        }
+
+        photoError?.let { Text(it, color = RedText, fontSize = 13.sp) }
+    }
+}
+
+@Composable
+private fun ProductPhotoPreview(uri: Uri, description: String) {
+    val resolver = LocalContext.current.contentResolver
+    val preview by produceState<Result<ImageBitmap>?>(null, resolver, uri) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { decodeProductPreview(resolver, uri).asImageBitmap() }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(LightBg),
+        contentAlignment = Alignment.Center
+    ) {
+        val loaded = preview
+        val bitmap = loaded?.getOrNull()
+        when {
+            loaded == null -> CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = PurpleAi,
+                strokeWidth = 2.dp
+            )
+            bitmap != null -> Image(
+                bitmap = bitmap,
+                contentDescription = description,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+            else -> Text(
+                text = "No se pudo mostrar la foto. Intenta elegir otra.",
+                color = RedText,
+                modifier = Modifier.padding(12.dp)
+            )
+        }
+    }
+}
+
+private fun decodeProductPreview(resolver: android.content.ContentResolver, uri: Uri): Bitmap {
+    val maxSide = 960
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        return ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
+            val size = info.size
+            val factor = minOf(1.0, maxSide.toDouble() / maxOf(size.width, size.height))
+            decoder.setTargetSize(
+                (size.width * factor).toInt().coerceAtLeast(1),
+                (size.height * factor).toInt().coerceAtLeast(1)
+            )
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+    }
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    require(bounds.outWidth > 0 && bounds.outHeight > 0)
+
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxSide) sample *= 2
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+    val bitmap = requireNotNull(
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+    )
+    val orientation = runCatching {
+        resolver.openInputStream(uri)?.use {
+            ExifInterface(it).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+        }
+    }.getOrNull()
+    val rotation = when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> return bitmap
+    }
+
+    val matrix = Matrix().apply { postRotate(rotation) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+}
+
+// Usa una autoridad propia para no interferir con otros proveedores de la app.
+class ProductPhotoFileProvider : FileProvider()
+
+private fun createProductPhotoUri(context: Context): Uri {
+    val directory = File(context.cacheDir, "product_photos")
+    check(directory.isDirectory || directory.mkdirs())
+    val file = File.createTempFile("product_", ".jpg", directory)
+
+    return try {
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.productphotos",
+            file
+        )
+    } catch (error: Exception) {
+        file.delete()
+        throw error
+    }
+}
+
+private fun deleteTemporaryProductPhoto(context: Context, value: String?) {
+    if (value == null) return
+    val uri = Uri.parse(value)
+    if (uri.scheme == "content" && uri.authority == "${context.packageName}.productphotos") {
+        runCatching { context.contentResolver.delete(uri, null, null) }
+    }
+}
+
 @Composable
 private fun FormCard(
     title: String,

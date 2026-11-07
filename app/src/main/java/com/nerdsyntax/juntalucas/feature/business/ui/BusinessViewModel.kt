@@ -359,7 +359,8 @@ class BusinessViewModel(
             active = product.active,
             stockMinimum = "${product.stockMinimum} $unit",
             lowStock = lowStock,
-            outOfStock = lowStock && product.stock == 0L
+            outOfStock = lowStock && product.stock == 0L,
+            photoStoragePath = product.photoStoragePath
         )
     }
 

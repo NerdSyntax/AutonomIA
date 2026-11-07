@@ -16,7 +16,8 @@ data class ProductItem(
     val active: Boolean = true,
     val stockMinimum: String = "",
     val lowStock: Boolean = false,
-    val outOfStock: Boolean = false
+    val outOfStock: Boolean = false,
+    val photoStoragePath: String? = null
 )
 
 data class BusinessUiState(

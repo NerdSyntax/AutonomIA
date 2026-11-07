@@ -1,6 +1,7 @@
 package com.nerdsyntax.juntalucas.core.navigation
 
 import androidx.compose.runtime.*
+import com.nerdsyntax.juntalucas.feature.business.data.FirebaseProductPhotoRepository
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
@@ -37,8 +38,15 @@ import com.nerdsyntax.juntalucas.feature.ai.ui.*
 import com.nerdsyntax.juntalucas.feature.profile.ui.*
 
 @Composable
+
 fun AppNavigation() {
     val navController = rememberNavController()
+
+    val appContext = LocalContext.current.applicationContext
+    val photoRepository = remember(appContext) {
+        FirebaseProductPhotoRepository(appContext)
+    }
+
     val authRepository = AppContainer.authRepository
     val factory = remember(authRepository) { AppViewModelFactory(authRepository, AppContainer.businessRepository) }
     val sessionViewModel: SessionViewModel = viewModel(factory = factory)
@@ -50,8 +58,12 @@ fun AppNavigation() {
 
     val startDestination = Routes.SPLASH
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { sessionViewModel.refreshBusiness() }
-
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        when (navController.currentDestination?.route) {
+            Routes.ADD_PRODUCT, Routes.EDIT_PRODUCT -> Unit
+            else -> sessionViewModel.refreshBusiness()
+        }
+    }
     LaunchedEffect(currentRoute) {
         if (currentRoute != Routes.AI && currentRoute != Routes.AI_CHAT) {
             showBottomBar = true
@@ -335,7 +347,8 @@ fun AppNavigation() {
                     onStockMinimoChange = vm::onStockMinimoChange,
                     onUnidadChange = vm::onUnidadChange,
                     onIsActiveChange = vm::onIsActiveChange,
-                    onSave = vm::saveProduct,
+                    onSave = { vm.saveProduct(photoRepository::upload) },
+                    onPhotoChange = vm::onPhotoChange,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -358,11 +371,11 @@ fun AppNavigation() {
                     onStockMinimoChange = vm::onStockMinimoChange,
                     onUnidadChange = vm::onUnidadChange,
                     onIsActiveChange = vm::onIsActiveChange,
-                    onSave = vm::saveProduct,
+                    onSave = { vm.saveProduct(photoRepository::upload) },
+                    onPhotoChange = vm::onPhotoChange,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-
             composable(Routes.AI) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AiViewModel = viewModel(factory = factory)
