@@ -2,7 +2,8 @@ package com.nerdsyntax.juntalucas.feature.business.ui
 
 enum class BusinessTab {
     PRODUCTOS,
-    INFORMACION
+    INFORMACION,
+    GASTOS
 }
 
 data class ProductItem(

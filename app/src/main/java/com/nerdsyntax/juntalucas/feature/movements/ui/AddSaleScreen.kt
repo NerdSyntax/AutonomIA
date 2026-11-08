@@ -62,8 +62,10 @@ fun AddSaleScreen(
     onRetryCatalog: () -> Unit,
     onCreateProduct: () -> Unit,
     onSave: () -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    editingProductName: String? = null
 ) {
+    val isEditing = editingProductName != null
     val context = LocalContext.current
     val totalFormateado = state.total?.let(::formatClp) ?: "—"
     BackHandler(enabled = state.isSaving) { }
@@ -107,7 +109,7 @@ fun AddSaleScreen(
                     Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(
-                            text = "NUEVO INGRESO",
+                            text = if (isEditing) "VENTA REGISTRADA" else "NUEVO INGRESO",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -115,7 +117,7 @@ fun AddSaleScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Registrar venta",
+                            text = if (isEditing) "Editar venta" else "Registrar venta",
                             color = Color.White,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
@@ -189,129 +191,135 @@ fun AddSaleScreen(
                         ).show()
                     }
 
-                    var productMenu by remember { mutableStateOf(false) }
-                    Box {
-                        SaleSelectionField(
-                            label = "Producto o servicio *",
-                            value = state.selectedProduct?.name ?: "Seleccionar",
-                            enabled = !state.isSaving && state.products.isNotEmpty(),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.Inventory2,
-                                    contentDescription = null,
-                                    tint = BrandPurple,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        ) { productMenu = true }
+                    if (editingProductName != null) {
+                        Text("Producto o servicio", color = TextGray, fontSize = 12.sp)
+                        Text(editingProductName, color = DarkBlue, fontWeight = FontWeight.Bold)
+                        Text("Se conserva el producto original.", color = TextGray, fontSize = 12.sp)
+                    } else {
+                        var productMenu by remember { mutableStateOf(false) }
+                        Box {
+                            SaleSelectionField(
+                                label = "Producto o servicio *",
+                                value = state.selectedProduct?.name ?: "Seleccionar",
+                                enabled = !state.isSaving && state.products.isNotEmpty(),
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Inventory2,
+                                        contentDescription = null,
+                                        tint = BrandPurple,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            ) { productMenu = true }
 
-                        DropdownMenu(
-                            expanded = productMenu,
-                            onDismissRequest = { productMenu = false },
-                            modifier = Modifier.background(Color.White)
-                        ) {
-                            state.products.forEach { product ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "${product.name} · ${formatClp(product.price)}",
-                                            color = DarkBlue
-                                        )
-                                    },
-                                    onClick = {
-                                        onProductSelected(product.id)
-                                        productMenu = false
-                                    }
-                                )
+                            DropdownMenu(
+                                expanded = productMenu,
+                                onDismissRequest = { productMenu = false },
+                                modifier = Modifier.background(Color.White)
+                            ) {
+                                state.products.forEach { product ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "${product.name} · ${formatClp(product.price)}",
+                                                color = DarkBlue
+                                            )
+                                        },
+                                        onClick = {
+                                            onProductSelected(product.id)
+                                            productMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    if (state.isCatalogLoading) {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(50)),
-                            color = BrandPurple
-                        )
-                    }
-
-                    state.catalogError?.let {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = it,
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f)
+                        if (state.isCatalogLoading) {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(50)),
+                                color = BrandPurple
                             )
-                            TextButton(onClick = onRetryCatalog, enabled = !state.isSaving) {
-                                Text("Reintentar", fontWeight = FontWeight.Bold)
-                            }
                         }
-                    }
 
-                    if (!state.isCatalogLoading && state.catalogError == null && state.products.isEmpty()) {
-                        Text(
-                            text = "No tienes productos o servicios activos. Crea uno para registrar la venta.",
-                            color = TextGray,
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    if (state.catalogFromCache && state.products.isNotEmpty()) {
-                        Text(
-                            text = "Catálogo local cargado; se validará al guardar.",
-                            color = TextGray,
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            onClick = { if (!state.isSaving) onCreateProduct() },
-                            shape = RoundedCornerShape(12.dp),
-                            color = LightPurple,
-                            border = BorderStroke(1.dp, BrandPurple.copy(alpha = 0.3f))
-                        ) {
+                        state.catalogError?.let {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = BrandPurple,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Crear producto o servicio",
-                                    color = BrandPurple,
+                                    text = it,
+                                    color = MaterialTheme.colorScheme.error,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    modifier = Modifier.weight(1f)
                                 )
+                                TextButton(onClick = onRetryCatalog, enabled = !state.isSaving) {
+                                    Text("Reintentar", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
-                        state.selectedProduct?.takeIf { it.trackStock }?.let {
+
+                        if (!state.isCatalogLoading && state.catalogError == null && state.products.isEmpty()) {
+                            Text(
+                                text = "No tienes productos o servicios activos. Crea uno para registrar la venta.",
+                                color = TextGray,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        if (state.catalogFromCache && state.products.isNotEmpty()) {
+                            Text(
+                                text = "Catálogo local cargado; se validará al guardar.",
+                                color = TextGray,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Surface(
-                                shape = RoundedCornerShape(50),
-                                color = GreenSoftBg
+                                onClick = { if (!state.isSaving) onCreateProduct() },
+                                shape = RoundedCornerShape(12.dp),
+                                color = LightPurple,
+                                border = BorderStroke(1.dp, BrandPurple.copy(alpha = 0.3f))
                             ) {
-                                Text(
-                                    text = "Stock: ${it.stock} ${it.unit}",
-                                    color = GreenPos,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = BrandPurple,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Crear producto o servicio",
+                                        color = BrandPurple,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            state.selectedProduct?.takeIf { it.trackStock }?.let {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = GreenSoftBg
+                                ) {
+                                    Text(
+                                        text = "Stock: ${it.stock} ${it.unit}",
+                                        color = GreenPos,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -500,7 +508,11 @@ fun AddSaleScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (state.isSaving) "Guardando..." else "Guardar venta",
+                        text = when {
+                            state.isSaving -> "Guardando..."
+                            isEditing -> "Guardar cambios"
+                            else -> "Guardar venta"
+                        },
                         color = if (canSave) Color.White else TextGray,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold

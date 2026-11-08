@@ -26,6 +26,7 @@ data class SaleDraft(
     val note: String = ""
 ) {
     val total: Long get() = calculateSaleTotal(quantity, unitPrice, discount)
+
     fun validate() {
         if (id.isBlank() || userId.isBlank() || productId.isBlank() || '/' in id || '/' in productId)
             throw DataValidationException("Selecciona un producto o servicio válido.")
@@ -45,8 +46,13 @@ data class Sale(
 
 interface SalesRepository {
     fun observeMonth(uid: String, month: String): Flow<Result<RemoteData<List<Sale>>>>
-    fun observeRange(uid: String, startDate: String, endDateExclusive: String): Flow<Result<RemoteData<List<Sale>>>> = observeMonth(uid, startDate.take(7))
+    fun observeRange(uid: String, startDate: String, endDateExclusive: String): Flow<Result<RemoteData<List<Sale>>>> =
+        observeMonth(uid, startDate.take(7))
+
     suspend fun save(draft: SaleDraft): Result<Unit>
+    suspend fun getById(uid: String, saleId: String): Result<Sale>
+    suspend fun update(draft: SaleDraft): Result<Unit>
+    suspend fun delete(uid: String, saleId: String): Result<Unit>
 }
 
 fun calculateSaleTotal(quantity: Long, unitPrice: Long, discount: Long): Long {
@@ -75,12 +81,16 @@ object SaleDates {
         isLenient = false
         timeZone = TimeZone.getTimeZone("UTC")
     }
+
     fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(java.util.Date())
+
     fun valid(date: String): Boolean = runCatching {
         date.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) &&
-            date.substring(0, 4).toInt() in 1900..9999 && format("yyyy-MM-dd").parse(date) != null
+                date.substring(0, 4).toInt() in 1900..9999 && format("yyyy-MM-dd").parse(date) != null
     }.getOrDefault(false)
+
     fun validMonth(month: String): Boolean = valid("$month-01")
+
     fun shiftMonth(month: String, offset: Int): String {
         require(validMonth(month))
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
@@ -88,6 +98,7 @@ object SaleDates {
         calendar.add(Calendar.MONTH, offset)
         return format("yyyy-MM").format(calendar.time)
     }
+
     fun monthLabel(month: String): String = format("MMMM yyyy").format(format("yyyy-MM-dd").parse("$month-01")!!)
     fun display(date: String): String = format("dd-MM-yyyy").format(format("yyyy-MM-dd").parse(date)!!)
 }

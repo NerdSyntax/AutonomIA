@@ -15,6 +15,10 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,10 +58,84 @@ fun MovementsScreen(
     onFilterSelected: (String) -> Unit = {},
     onAddClick: (Boolean) -> Unit = {},
     onRetry: () -> Unit = {},
-    onChangeMonth: (Int) -> Unit = {}
+    onChangeMonth: (Int) -> Unit = {},
+    showMovementTabs: Boolean = true,
+    onEditExpense: ((String) -> Unit)? = null,
+    onDeleteExpense: ((String) -> Unit)? = null,
+    expenseDeletion: ExpenseDeletionState = ExpenseDeletionState(),
+    onClearExpenseDeletion: () -> Unit = {},
+    onEditSale: ((String) -> Unit)? = null,
+    onDeleteSale: ((String) -> Unit)? = null,
+    saleDeletion: SaleDeletionState = SaleDeletionState(),
+    onClearSaleDeletion: () -> Unit = {}
 ) {
     val isSalesTab = state.selectedTab == MovementTab.VENTAS
     val currentMonthLabel = SaleDates.monthLabel(state.month).replaceFirstChar { it.uppercase() }
+
+    val selectedMovement = remember { mutableStateOf<MovementItem?>(null) }
+
+    selectedMovement.value?.let { movement ->
+        key(movement.isIncome, movement.id) {
+            val showDeleteConfirmation = remember { mutableStateOf(false) }
+            val expenseResult = expenseDeletion.takeIf {
+                !movement.isIncome && it.expenseId == movement.id
+            }
+            val saleResult = saleDeletion.takeIf {
+                movement.isIncome && it.saleId == movement.id
+            }
+            val isDeleting = expenseResult?.isDeleting == true || saleResult?.isDeleting == true
+            val deleted = expenseResult?.isSuccess == true || saleResult?.isSuccess == true
+            val errorMessage = saleResult?.errorMessage ?: expenseResult?.errorMessage
+            val edit = if (movement.isIncome) onEditSale else onEditExpense
+            val delete = if (movement.isIncome) onDeleteSale else onDeleteExpense
+            val clearDeletion = if (movement.isIncome) onClearSaleDeletion else onClearExpenseDeletion
+
+            val closeDetail: () -> Unit = {
+                selectedMovement.value = null
+                clearDeletion()
+            }
+
+            LaunchedEffect(deleted) {
+                if (deleted) closeDetail()
+            }
+
+            MovementDetailSheet(
+                movement = movement,
+                onDismiss = {
+                    if (!isDeleting && !showDeleteConfirmation.value) closeDetail()
+                },
+                actionsEnabled = !isDeleting && !showDeleteConfirmation.value,
+                onEdit = if (edit == null) null else {
+                    {
+                        closeDetail()
+                        edit(movement.id)
+                    }
+                },
+                onRequestDelete = if (delete == null) null else {
+                    {
+                        clearDeletion()
+                        showDeleteConfirmation.value = true
+                    }
+                }
+            )
+
+            if (showDeleteConfirmation.value && delete != null) {
+                DeleteMovementDialog(
+                    title = movement.title,
+                    isSale = movement.isIncome,
+                    isDeleting = isDeleting,
+                    errorMessage = errorMessage,
+                    onConfirm = { delete(movement.id) },
+                    onDismiss = {
+                        if (!isDeleting) {
+                            showDeleteConfirmation.value = false
+                            clearDeletion()
+                        }
+                    }
+                )
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -76,7 +154,12 @@ fun MovementsScreen(
                         color = DarkBlue,
                         shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
                     )
-                    .padding(top = 48.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
+                    .padding(
+                        top = if (showMovementTabs) 48.dp else 16.dp,
+                        bottom = 24.dp,
+                        start = 20.dp,
+                        end = 20.dp
+                    )
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -93,7 +176,7 @@ fun MovementsScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Movimientos",
+                            text = if (showMovementTabs) "Movimientos" else "Gastos",
                             color = Color.White,
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold
@@ -142,33 +225,35 @@ fun MovementsScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                if (showMovementTabs) {
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.1f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp)
-                ) {
-                    Row(
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.1f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(4.dp)
                     ) {
-                        SegmentedTabItem(
-                            modifier = Modifier.weight(1f),
-                            text = "Ventas",
-                            isSelected = isSalesTab,
-                            onClick = { onTabSelected(MovementTab.VENTAS) }
-                        )
-                        SegmentedTabItem(
-                            modifier = Modifier.weight(1f),
-                            text = "Gastos",
-                            isSelected = !isSalesTab,
-                            onClick = { onTabSelected(MovementTab.GASTOS) }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SegmentedTabItem(
+                                modifier = Modifier.weight(1f),
+                                text = "Ventas",
+                                isSelected = isSalesTab,
+                                onClick = { onTabSelected(MovementTab.VENTAS) }
+                            )
+                            SegmentedTabItem(
+                                modifier = Modifier.weight(1f),
+                                text = "Gastos",
+                                isSelected = !isSalesTab,
+                                onClick = { onTabSelected(MovementTab.GASTOS) }
+                            )
+                        }
                     }
                 }
 
@@ -460,6 +545,10 @@ fun MovementsScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .clickable(onClickLabel = "Ver detalle") {
+                                                if (mov.isIncome) onClearSaleDeletion() else onClearExpenseDeletion()
+                                                selectedMovement.value = mov
+                                            }
                                             .padding(vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -597,4 +686,113 @@ private fun SegmentedTabItem(
             )
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MovementDetailSheet(
+    movement: MovementItem,
+    onDismiss: () -> Unit,
+    actionsEnabled: Boolean,
+    onEdit: (() -> Unit)?,
+    onRequestDelete: (() -> Unit)?
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = if (movement.isIncome) "Detalle de venta" else "Detalle de gasto",
+                color = TextGray,
+                fontSize = 14.sp
+            )
+
+            Text(
+                text = movement.title,
+                color = DarkBlue,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = movement.amount,
+                color = if (movement.isIncome) GreenPos else RedNeg,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            HorizontalDivider(color = BorderLight)
+
+            Text(text = "Fecha: ${movement.date}", color = DarkBlue)
+            Text(text = "Medio de pago: ${movement.paymentMethod}", color = DarkBlue)
+
+            if (onEdit != null) {
+                Button(
+                    onClick = onEdit,
+                    enabled = actionsEnabled,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (movement.isIncome) "Editar venta" else "Editar gasto")
+                }
+            }
+
+            if (onRequestDelete != null) {
+                OutlinedButton(
+                    onClick = onRequestDelete,
+                    enabled = actionsEnabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RedNeg)
+                ) {
+                    Text(if (movement.isIncome) "Eliminar venta" else "Eliminar gasto")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteMovementDialog(
+    title: String,
+    isSale: Boolean,
+    isDeleting: Boolean,
+    errorMessage: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isSale) "¿Eliminar venta?" else "¿Eliminar gasto?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Se eliminará «$title» y se actualizarán los totales.")
+                if (isSale) {
+                    Text("Si la venta descontó stock, se devolverán sus unidades.")
+                }
+                if (errorMessage != null) {
+                    Text(errorMessage, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isDeleting,
+                colors = ButtonDefaults.buttonColors(containerColor = RedNeg)
+            ) {
+                Text(if (isDeleting) "Eliminando…" else "Eliminar")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isDeleting
+            ) {
+                Text("Cancelar")
+            }
+        }
+    )
 }

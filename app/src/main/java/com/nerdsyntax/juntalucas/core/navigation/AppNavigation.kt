@@ -1,5 +1,7 @@
 package com.nerdsyntax.juntalucas.core.navigation
 
+import android.net.Uri
+import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import androidx.compose.runtime.*
 import com.nerdsyntax.juntalucas.feature.business.data.FirebaseProductPhotoRepository
 import androidx.compose.foundation.layout.*
@@ -8,16 +10,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.nerdsyntax.juntalucas.core.session.BusinessSetupStatus
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.*
 import com.nerdsyntax.juntalucas.core.session.SessionViewModel
 import com.nerdsyntax.juntalucas.di.AppContainer
@@ -31,16 +38,31 @@ import com.nerdsyntax.juntalucas.feature.auth.ui.verify.*
 import com.nerdsyntax.juntalucas.feature.auth.ui.welcome.*
 import com.nerdsyntax.juntalucas.feature.onboarding.ui.*
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.*
+import com.nerdsyntax.juntalucas.feature.movements.data.FirebaseExpensesRepository
+import com.nerdsyntax.juntalucas.feature.movements.data.FirebaseSalesRepository
+import com.nerdsyntax.juntalucas.feature.movements.domain.Expense
 import com.nerdsyntax.juntalucas.feature.movements.ui.*
 import com.nerdsyntax.juntalucas.feature.business.ui.*
 import com.nerdsyntax.juntalucas.feature.business.ui.product.*
 import com.nerdsyntax.juntalucas.feature.ai.ui.*
 import com.nerdsyntax.juntalucas.feature.profile.ui.*
 
-@Composable
+private const val EDIT_SALE_PATH = "edit_sale"
+private const val EDIT_SALE_ID = "saleId"
+private const val EDIT_SALE_ROUTE = "$EDIT_SALE_PATH/{$EDIT_SALE_ID}"
 
+private const val EDIT_EXPENSE_PATH = "edit_expense"
+private const val EDIT_EXPENSE_ID = "expenseId"
+private const val EDIT_EXPENSE_ROUTE = "$EDIT_EXPENSE_PATH/{$EDIT_EXPENSE_ID}"
+
+@Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val openExpenseEditor: (String) -> Unit = { id ->
+        navController.navigate("$EDIT_EXPENSE_PATH/${Uri.encode(id)}") {
+            launchSingleTop = true
+        }
+    }
 
     val appContext = LocalContext.current.applicationContext
     val photoRepository = remember(appContext) {
@@ -73,8 +95,13 @@ fun AppNavigation() {
     LaunchedEffect(session, currentRoute) {
         if (currentRoute == null || currentRoute == Routes.SPLASH) return@LaunchedEffect
 
-        val target = sessionDestination(session, currentRoute)
-        if (target != null && target != currentRoute) navController.navigateAndClear(target)
+        val routeForSession = when (currentRoute) {
+            EDIT_EXPENSE_ROUTE -> Routes.ADD_EXPENSE
+            EDIT_SALE_ROUTE -> Routes.ADD_SALE
+            else -> currentRoute
+        }
+        val target = sessionDestination(session, routeForSession)
+        if (target != null && target != routeForSession) navController.navigateAndClear(target)
     }
 
     Scaffold(
@@ -246,6 +273,9 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: MovementsViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                val deletion by vm.expenseDeletion.collectAsStateWithLifecycle()
+                val saleDeletion by vm.saleDeletion.collectAsStateWithLifecycle()
+
                 MovementsScreen(
                     state = state,
                     onTabSelected = vm::onTabSelected,
@@ -255,29 +285,64 @@ fun AppNavigation() {
                     onChangeMonth = vm::changeMonth,
                     onAddClick = { isSale ->
                         navController.navigate(if (isSale) Routes.ADD_SALE else Routes.ADD_EXPENSE)
-                    }
+                    },
+                    onEditExpense = openExpenseEditor,
+                    onDeleteExpense = vm::deleteExpense,
+                    expenseDeletion = deletion,
+                    onClearExpenseDeletion = vm::clearExpenseDeletion,
+                    onEditSale = { id ->
+                        navController.navigate("$EDIT_SALE_PATH/${Uri.encode(id)}") {
+                            launchSingleTop = true
+                        }
+                    },
+                    onDeleteSale = vm::deleteSale,
+                    saleDeletion = saleDeletion,
+                    onClearSaleDeletion = vm::clearSaleDeletion
                 )
             }
 
             composable(Routes.ADD_SALE) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AddSaleViewModel = viewModel(factory = factory)
-                val state by vm.uiState.collectAsStateWithLifecycle()
-                LaunchedEffect(state.isSuccess) {
-                    if (state.isSuccess) navController.popBackStack()
-                }
-                AddSaleScreen(
-                    state = state,
-                    onDateChange = vm::onDateChange,
-                    onProductSelected = vm::onProductSelected,
-                    onQuantityChange = vm::onQuantityChange,
-                    onPriceChange = vm::onPriceChange,
-                    onDiscountChange = vm::onDiscountChange,
-                    onPaymentChange = vm::onPaymentChange,
-                    onNoteChange = vm::onNoteChange,
-                    onRetryCatalog = vm::retryCatalog,
+                SaleFormRoute(
+                    vm = vm,
                     onCreateProduct = { navController.navigate(Routes.ADD_PRODUCT) },
-                    onSave = vm::save,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = EDIT_SALE_ROUTE,
+                arguments = listOf(navArgument(EDIT_SALE_ID) { type = NavType.StringType })
+            ) { entry ->
+                if (!session.canAccessDashboard) return@composable
+                val id = entry.arguments?.getString(EDIT_SALE_ID)
+                    ?.takeIf { it.isNotBlank() && '/' !in it && it != "." && it != ".." }
+
+                if (id == null) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("La venta no es válida.")
+                        Button(onClick = { navController.popBackStack() }) { Text("Volver") }
+                    }
+                    return@composable
+                }
+
+                val vm: AddSaleViewModel = viewModel(viewModelStoreOwner = entry) {
+                    AddSaleViewModel(
+                        auth = authRepository,
+                        sales = FirebaseSalesRepository(),
+                        catalog = AppContainer.catalogRepository,
+                        savedState = createSavedStateHandle(),
+                        initialSaleId = id
+                    )
+                }
+                SaleFormRoute(
+                    vm = vm,
+                    onCreateProduct = {},
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -285,20 +350,45 @@ fun AppNavigation() {
             composable(Routes.ADD_EXPENSE) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AddExpenseViewModel = viewModel(factory = factory)
-                val state by vm.uiState.collectAsStateWithLifecycle()
-                LaunchedEffect(state.isSuccess) {
-                    if (state.isSuccess) navController.popBackStack()
+                ExpenseFormRoute(
+                    vm = vm,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = EDIT_EXPENSE_ROUTE,
+                arguments = listOf(navArgument(EDIT_EXPENSE_ID) { type = NavType.StringType })
+            ) { entry ->
+                if (!session.canAccessDashboard) return@composable
+                val id = entry.arguments?.getString(EDIT_EXPENSE_ID)
+                    ?.takeIf { it.isNotBlank() && '/' !in it }
+
+                if (id == null) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("El gasto no es válido.")
+                        Button(onClick = { navController.popBackStack() }) {
+                            Text("Volver")
+                        }
+                    }
+                    return@composable
                 }
-                AddExpenseScreen(
-                    state = state,
-                    onDescriptionChange = vm::onDescriptionChange,
-                    onCategoryChange = vm::onCategoryChange,
-                    onAmountChange = vm::onAmountChange,
-                    onDateChange = vm::onDateChange,
-                    onTypeChange = vm::onTypeChange,
-                    onPaymentChange = vm::onPaymentChange,
-                    onNoteChange = vm::onNoteChange,
-                    onSave = vm::save,
+
+                val vm: AddExpenseViewModel = viewModel(viewModelStoreOwner = entry) {
+                    AddExpenseViewModel(
+                        auth = authRepository,
+                        expenses = FirebaseExpensesRepository(),
+                        savedState = createSavedStateHandle(),
+                        initialExpenseId = id
+                    )
+                }
+
+                ExpenseFormRoute(
+                    vm = vm,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -307,6 +397,14 @@ fun AppNavigation() {
                 if (!session.canAccessDashboard) return@composable
                 val vm: BusinessViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                val user by authRepository.currentUser.collectAsStateWithLifecycle()
+                var expenseHistoryRetry by remember { mutableStateOf(0) }
+                val expenseHistory = if (state.selectedTab == BusinessTab.GASTOS) {
+                    RegisteredExpenseHistory(user?.uid, expenseHistoryRetry)
+                } else {
+                    RegisteredExpensesUiState()
+                }
+
                 BusinessScreen(
                     state = state,
                     onTabSelected = vm::onTabSelected,
@@ -323,7 +421,15 @@ fun AppNavigation() {
                     onBusinessRubroChange = vm::onBusinessRubroChange,
                     onBusinessRegionChange = vm::onBusinessRegionChange,
                     onBusinessComunaChange = vm::onBusinessComunaChange,
-                    onBusinessMetaChange = vm::onBusinessMetaChange
+                    onBusinessMetaChange = vm::onBusinessMetaChange,
+                    registeredExpensesState = expenseHistory,
+                    onRetryRegisteredExpenses = { expenseHistoryRetry += 1 },
+                    onEditRegisteredExpense = openExpenseEditor,
+                    onAddRegisteredExpense = {
+                        navController.navigate(Routes.ADD_EXPENSE) {
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
 
@@ -428,6 +534,143 @@ fun AppNavigation() {
             }
         }
     }
+}
+
+@Composable
+private fun RegisteredExpenseHistory(
+    uid: String?,
+    retry: Int
+): RegisteredExpensesUiState = key(uid, retry) {
+    val history by produceState(RegisteredExpensesUiState()) {
+        if (uid == null) {
+            value = RegisteredExpensesUiState(
+                isLoading = false,
+                errorMessage = "Inicia sesión para ver tus gastos."
+            )
+            return@produceState
+        }
+
+        val auth = AppContainer.authRepository
+        try {
+            AppContainer.expensesRepository.observeHistory(uid).collect { result ->
+                if (auth.currentUser.value?.uid != uid) return@collect
+
+                value = result.fold(
+                    onSuccess = { data ->
+                        RegisteredExpensesUiState(
+                            items = data.value.sortedWith(
+                                compareByDescending<Expense> { it.draft.expenseDate }
+                                    .thenByDescending { it.createdAtMillis }
+                                    .thenBy { it.draft.id }
+                            ),
+                            isLoading = false,
+                            fromCache = data.fromCache
+                        )
+                    },
+                    onFailure = { error ->
+                        value.copy(isLoading = false, errorMessage = error.salesUserMessage())
+                    }
+                )
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (auth.currentUser.value?.uid == uid) {
+                value = value.copy(isLoading = false, errorMessage = error.salesUserMessage())
+            }
+        }
+    }
+    history
+}
+
+@Composable
+private fun SaleFormRoute(
+    vm: AddSaleViewModel,
+    onCreateProduct: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val sale by vm.editingSale.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.isSuccess) {
+        if (state.isSuccess) onNavigateBack()
+    }
+
+    if (vm.isEditing && (sale == null || state.isCatalogLoading)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val error = state.catalogError
+            if (error == null) {
+                CircularProgressIndicator()
+                Text("Cargando venta…")
+            } else {
+                Text(error)
+                Button(onClick = vm::retryCatalog) { Text("Reintentar") }
+            }
+            Button(onClick = onNavigateBack) { Text("Volver") }
+        }
+        return
+    }
+
+    AddSaleScreen(
+        state = state,
+        onDateChange = vm::onDateChange,
+        onProductSelected = vm::onProductSelected,
+        onQuantityChange = vm::onQuantityChange,
+        onPriceChange = vm::onPriceChange,
+        onDiscountChange = vm::onDiscountChange,
+        onPaymentChange = vm::onPaymentChange,
+        onNoteChange = vm::onNoteChange,
+        onRetryCatalog = vm::retryCatalog,
+        onCreateProduct = onCreateProduct,
+        onSave = vm::save,
+        onNavigateBack = onNavigateBack,
+        editingProductName = sale?.productName
+    )
+}
+
+@Composable
+private fun ExpenseFormRoute(
+    vm: AddExpenseViewModel,
+    onNavigateBack: () -> Unit
+) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val isLoading by vm.isLoadingExpense.collectAsStateWithLifecycle()
+    val suggestionsState by vm.suggestionsState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.isSuccess) {
+        if (state.isSuccess) onNavigateBack()
+    }
+
+    if (isLoading) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator()
+            Text("Cargando gasto…")
+            Button(onClick = onNavigateBack) { Text("Volver") }
+        }
+        return
+    }
+
+    AddExpenseScreen(
+        state = state,
+        onDescriptionChange = vm::onDescriptionChange,
+        onCategoryChange = vm::onCategoryChange,
+        onAmountChange = vm::onAmountChange,
+        onDateChange = vm::onDateChange,
+        onTypeChange = vm::onTypeChange,
+        onPaymentChange = vm::onPaymentChange,
+        onNoteChange = vm::onNoteChange,
+        onSave = vm::save,
+        onNavigateBack = onNavigateBack,
+        suggestions = if (vm.isEditing) null else suggestionsState.items
+    )
 }
 
 private fun NavHostController.navigateAndClear(route: String) {

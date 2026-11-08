@@ -1,7 +1,6 @@
 package com.nerdsyntax.juntalucas.feature.business.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.draw.clip
 import com.nerdsyntax.juntalucas.feature.business.ui.product.StoredProductPhoto
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,11 +28,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nerdsyntax.juntalucas.core.format.formatClp
+import com.nerdsyntax.juntalucas.feature.movements.domain.Expense
+import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val HeaderGradientEnd = Color(0xFF2E1A68)
@@ -56,6 +60,13 @@ private val PurpleText = Color(0xFF6D28D9)
 private val PurpleBg = Color(0xFFF5F3FF)
 private val SlateBg = Color(0xFFF1F5F9)
 
+data class RegisteredExpensesUiState(
+    val items: List<Expense> = emptyList(),
+    val isLoading: Boolean = true,
+    val errorMessage: String? = null,
+    val fromCache: Boolean = false
+)
+
 @Composable
 fun BusinessScreen(
     state: BusinessUiState,
@@ -73,7 +84,11 @@ fun BusinessScreen(
     onBusinessRubroChange: (String) -> Unit = {},
     onBusinessRegionChange: (String) -> Unit = {},
     onBusinessComunaChange: (String) -> Unit = {},
-    onBusinessMetaChange: (String) -> Unit = {}
+    onBusinessMetaChange: (String) -> Unit = {},
+    registeredExpensesState: RegisteredExpensesUiState = RegisteredExpensesUiState(),
+    onRetryRegisteredExpenses: () -> Unit = {},
+    onEditRegisteredExpense: ((String) -> Unit)? = null,
+    onAddRegisteredExpense: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
@@ -91,40 +106,49 @@ fun BusinessScreen(
                 onRetry = onRetry
             )
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        horizontal = 20.dp,
-                        vertical = 20.dp
-                    )
-            ) {
-                if (state.selectedTab == BusinessTab.PRODUCTOS) {
-                    ProductsTabContent(
-                        state = state,
-                        onSearchChange = onSearchChange,
-                        onFilterSelected = onFilterSelected,
-                        onEditProduct = onEditProduct,
-                        onDeactivateProduct = onDeactivateProduct,
-                        onRetry = onRetry
-                    )
-                } else {
-                    InfoTabContent(
-                        state = state,
-                        onRetry = onRetry,
-                        onStartEditing = onStartEditingBusiness,
-                        onCancelEditing = onCancelEditingBusiness,
-                        onSave = onSaveBusiness,
-                        onNameChange = onBusinessNameChange,
-                        onRubroChange = onBusinessRubroChange,
-                        onRegionChange = onBusinessRegionChange,
-                        onComunaChange = onBusinessComunaChange,
-                        onMetaChange = onBusinessMetaChange
-                    )
-                }
+            if (state.selectedTab == BusinessTab.GASTOS) {
+                BusinessExpensesTab(
+                    registered = registeredExpensesState,
+                    onRetryRegistered = onRetryRegisteredExpenses,
+                    onEditRegistered = onEditRegisteredExpense,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(
+                            horizontal = 20.dp,
+                            vertical = 20.dp
+                        )
+                ) {
+                    if (state.selectedTab == BusinessTab.PRODUCTOS) {
+                        ProductsTabContent(
+                            state = state,
+                            onSearchChange = onSearchChange,
+                            onFilterSelected = onFilterSelected,
+                            onEditProduct = onEditProduct,
+                            onDeactivateProduct = onDeactivateProduct,
+                            onRetry = onRetry
+                        )
+                    } else {
+                        InfoTabContent(
+                            state = state,
+                            onRetry = onRetry,
+                            onStartEditing = onStartEditingBusiness,
+                            onCancelEditing = onCancelEditingBusiness,
+                            onSave = onSaveBusiness,
+                            onNameChange = onBusinessNameChange,
+                            onRubroChange = onBusinessRubroChange,
+                            onRegionChange = onBusinessRegionChange,
+                            onComunaChange = onBusinessComunaChange,
+                            onMetaChange = onBusinessMetaChange
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(90.dp))
+                    Spacer(modifier = Modifier.height(90.dp))
+                }
             }
         }
 
@@ -133,6 +157,17 @@ fun BusinessScreen(
                 text = "Agregar",
                 icon = Icons.Default.Add,
                 onClick = onAddClick,
+                elevation = 3.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            )
+        } else if (state.selectedTab == BusinessTab.GASTOS) {
+            GradientButton(
+                text = "Agregar",
+                icon = Icons.Default.Add,
+                onClick = { onAddRegisteredExpense?.invoke() },
+                enabled = onAddRegisteredExpense != null,
                 elevation = 3.dp,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -213,10 +248,17 @@ private fun BusinessHeader(
             TabPill(
                 text = "Productos y servicios",
                 isSelected = selectedTab == BusinessTab.PRODUCTOS,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1.6f),
                 onClick = {
                     onTabSelected(BusinessTab.PRODUCTOS)
                 }
+            )
+
+            TabPill(
+                text = "Gastos",
+                isSelected = selectedTab == BusinessTab.GASTOS,
+                modifier = Modifier.weight(0.8f),
+                onClick = { onTabSelected(BusinessTab.GASTOS) }
             )
 
             TabPill(
@@ -465,7 +507,8 @@ private fun TabPill(
             } else {
                 FontWeight.Medium
             },
-            fontSize = 14.sp
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -1568,6 +1611,277 @@ private fun GradientButton(
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun BusinessExpensesTab(
+    registered: RegisteredExpensesUiState,
+    onRetryRegistered: () -> Unit,
+    onEditRegistered: ((String) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    var byCategory by rememberSaveable { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = !byCategory,
+                onClick = { byCategory = false },
+                label = { Text("Registrados") }
+            )
+            FilterChip(
+                selected = byCategory,
+                onClick = { byCategory = true },
+                label = { Text("Categorías") }
+            )
+        }
+
+        RegisteredExpensesList(
+            state = registered,
+            byCategory = byCategory,
+            onRetry = onRetryRegistered,
+            onEdit = onEditRegistered,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+private data class ExpenseCategoryGroup(
+    val key: String,
+    val name: String,
+    val expenses: List<Expense>
+)
+
+private val categoryWhitespace = Regex("\\s+")
+
+private fun normalizedCategory(text: String): String =
+    text.trim().replace(categoryWhitespace, " ").lowercase(Locale.ROOT)
+
+private fun groupExpensesByCategory(expenses: List<Expense>): List<ExpenseCategoryGroup> =
+    expenses.groupBy { normalizedCategory(it.draft.category) }
+        .map { (key, group) ->
+            ExpenseCategoryGroup(
+                key = key,
+                name = group.first().draft.category.trim().replace(categoryWhitespace, " "),
+                expenses = group
+            )
+        }
+        .sortedBy { it.key }
+
+@Composable
+private fun RegisteredExpensesList(
+    state: RegisteredExpensesUiState,
+    byCategory: Boolean,
+    onRetry: () -> Unit,
+    onEdit: ((String) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    var registeredQuery by rememberSaveable { mutableStateOf("") }
+    var categoryQuery by rememberSaveable { mutableStateOf("") }
+    var expandedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val searchQuery = if (byCategory) categoryQuery else registeredQuery
+    val query = normalizedCategory(searchQuery)
+    val visible = remember(state.items, query, byCategory) {
+        when {
+            byCategory -> emptyList()
+            query.isBlank() -> state.items
+            else -> state.items.filter { expense ->
+                normalizedCategory(expense.draft.description).contains(query) ||
+                        normalizedCategory(expense.draft.category).contains(query)
+            }
+        }
+    }
+    val groups = remember(state.items, byCategory) {
+        if (byCategory) groupExpensesByCategory(state.items) else emptyList()
+    }
+    val visibleGroups = remember(groups, query) {
+        if (query.isBlank()) groups
+        else groups.filter { group ->
+            group.key.contains(query) || group.expenses.any {
+                normalizedCategory(it.draft.description).contains(query)
+            }
+        }
+    }
+    val hasResults = if (byCategory) visibleGroups.isNotEmpty() else visible.isNotEmpty()
+
+    key(byCategory) {
+        LazyColumn(
+            modifier = modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { if (byCategory) categoryQuery = it else registeredQuery = it },
+                    placeholder = {
+                        Text(
+                            if (byCategory) "Buscar categoría o gasto…" else "Buscar gastos registrados…",
+                            color = TextMuted
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true
+                )
+            }
+
+            when {
+                state.isLoading -> item {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                state.errorMessage != null -> item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(state.errorMessage, color = RedText)
+                        OutlinedButton(onClick = onRetry) { Text("Reintentar") }
+                    }
+                }
+                state.fromCache && state.items.isEmpty() -> item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("No se pudo confirmar el historial. Revisa tu conexión.", color = TextGray)
+                        OutlinedButton(onClick = onRetry) { Text("Reintentar") }
+                    }
+                }
+                !hasResults -> item {
+                    Text(
+                        text = when {
+                            query.isBlank() -> "Aún no hay gastos registrados."
+                            byCategory -> "No encontramos categorías con esa búsqueda."
+                            else -> "No encontramos gastos con esa búsqueda."
+                        },
+                        color = TextGray
+                    )
+                }
+            }
+
+            if (state.fromCache && hasResults) {
+                item { Text("Mostrando los últimos datos disponibles.", color = TextGray) }
+            }
+
+            if (byCategory) {
+                visibleGroups.forEach { group ->
+                    val expanded = expandedCategory == group.key
+                    item(key = "category:${group.key}") {
+                        ExpenseCategoryCard(
+                            group = group,
+                            expanded = expanded,
+                            onToggle = { expandedCategory = if (expanded) null else group.key }
+                        )
+                    }
+                    if (expanded) {
+                        items(group.expenses, key = { "expense:${it.draft.id}" }) { expense ->
+                            RegisteredExpenseCard(
+                                expense = expense,
+                                onEdit = onEdit,
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(visible, key = { it.draft.id }) { expense ->
+                    RegisteredExpenseCard(expense, onEdit)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpenseCategoryCard(
+    group: ExpenseCategoryGroup,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(
+            onClickLabel = if (expanded) "Ocultar gastos de la categoría"
+            else "Ver gastos de la categoría",
+            onClick = onToggle
+        ),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = if (expanded) PurpleBg else Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(group.name, color = DarkBlue, fontWeight = FontWeight.Bold)
+                val count = group.expenses.size
+                Text(
+                    text = if (count == 1) "1 gasto" else "$count gastos",
+                    color = TextGray,
+                    fontSize = 12.sp
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp
+                else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = PurpleText
+            )
+        }
+    }
+}
+
+@Composable
+private fun RegisteredExpenseCard(
+    expense: Expense,
+    onEdit: ((String) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val draft = expense.draft
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (onEdit != null) Modifier.clickable(onClickLabel = "Editar gasto") {
+                    onEdit(draft.id)
+                } else Modifier
+            ),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(draft.description, color = DarkBlue, fontWeight = FontWeight.Bold)
+                Text(draft.category, color = TextGray, fontSize = 12.sp)
+                Text(
+                    text = "${SaleDates.display(draft.expenseDate)} · ${draft.paymentMethod.label}",
+                    color = TextGray,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = formatClp(draft.amount),
+                color = RedText,
+                fontWeight = FontWeight.Bold
             )
         }
     }

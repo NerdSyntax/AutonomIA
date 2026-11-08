@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.movements.domain.*
 import java.util.Locale
 
@@ -37,6 +39,12 @@ private val BrandPurple = Color(0xFF7C3AED)
 
 private val ExpensePurpleGradient = Brush.horizontalGradient(
     colors = listOf(Color(0xFF6366F1), Color(0xFF9333EA))
+)
+
+data class ExpenseSuggestion(
+    val description: String,
+    val category: String,
+    val amount: Long?
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,7 +59,8 @@ fun AddExpenseScreen(
     onPaymentChange: (PaymentMethod) -> Unit,
     onNoteChange: (String) -> Unit,
     onSave: () -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    suggestions: List<ExpenseSuggestion>? = null
 ) {
     val context = LocalContext.current
     BackHandler(enabled = state.isSaving) { }
@@ -151,6 +160,18 @@ fun AddExpenseScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
+
+                    if (suggestions != null) {
+                        ExpenseSuggestionField(
+                            suggestions = suggestions,
+                            enabled = !state.isSaving && !state.isSuccess,
+                            onSelect = { suggestion ->
+                                onDescriptionChange(suggestion.description)
+                                onCategoryChange(suggestion.category)
+                                onAmountChange(suggestion.amount?.toString().orEmpty())
+                            }
+                        )
+                    }
 
                     MovementTextField(
                         label = "Descripción *",
@@ -351,6 +372,77 @@ fun AddExpenseScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun ExpenseSuggestionField(
+    suggestions: List<ExpenseSuggestion>,
+    enabled: Boolean,
+    onSelect: (ExpenseSuggestion) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        SelectionField(
+            label = "Reutilizar un gasto (opcional)",
+            value = "Seleccionar",
+            enabled = enabled,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Outlined.ReceiptLong,
+                    contentDescription = null,
+                    tint = BrandPurple,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        ) { expanded = true }
+
+        DropdownMenu(
+            expanded = expanded && enabled,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .heightIn(max = 320.dp)
+                .background(Color.White)
+        ) {
+            DropdownMenuItem(
+                text = { Text("Ingresar manualmente", color = BrandPurple) },
+                onClick = { expanded = false }
+            )
+
+            if (suggestions.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Aún no hay gastos para reutilizar", color = TextGray) },
+                    enabled = false,
+                    onClick = {}
+                )
+            }
+
+            suggestions.forEach { suggestion ->
+                DropdownMenuItem(
+                    text = {
+                        val amountLabel = suggestion.amount?.let { formatClp(it) }
+                        Column {
+                            Text(
+                                text = suggestion.description,
+                                color = DarkBlue,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (amountLabel == null) suggestion.category
+                                else "${suggestion.category} · $amountLabel",
+                                color = TextGray,
+                                fontSize = 12.sp
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(suggestion)
+                    }
+                )
+            }
         }
     }
 }

@@ -1,4 +1,7 @@
 package com.nerdsyntax.juntalucas.feature.movements.ui
+
+import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
+
 data class MovementsUiState(
     val selectedTab: MovementTab = MovementTab.VENTAS,
     val searchQuery: String = "",
@@ -6,14 +9,23 @@ data class MovementsUiState(
     val movements: List<MovementItem> = emptyList(),
     val totalVendido: String = "$0",
     val ticketPromedio: String = "$0",
-    val month: String = com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates.today().take(7),
+    val month: String = SaleDates.today().take(7),
     val errorMessage: String? = null,
     val fromCache: Boolean = false,
     val totalGastos: String = "$0",
     val isLoading: Boolean = false
 )
-enum class MovementTab { VENTAS, GASTOS }
+
+enum class MovementTab {
+    VENTAS,
+    GASTOS
+}
+
 data class MovementItem(
-    val id: String, val title: String, val date: String,
-    val paymentMethod: String, val amount: String, val isIncome: Boolean
+    val id: String,
+    val title: String,
+    val date: String,
+    val paymentMethod: String,
+    val amount: String,
+    val isIncome: Boolean
 )

@@ -2,20 +2,31 @@ package com.nerdsyntax.juntalucas.feature.business.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nerdsyntax.juntalucas.core.data.DataValidationException
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.formatClp
+import com.nerdsyntax.juntalucas.core.format.parseClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.*
 import com.nerdsyntax.juntalucas.feature.movements.domain.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+
+data class ReusableExpensesUiState(
+    val items: List<ReusableExpense> = emptyList(),
+    val isLoading: Boolean = true,
+    val errorMessage: String? = null,
+    val fromCache: Boolean = false
+)
 
 class BusinessViewModel(
     private val auth: AuthRepository,
     private val businessRepository: BusinessRepository,
     private val catalogRepository: CatalogRepository,
-    private val salesRepository: SalesRepository
+    private val salesRepository: SalesRepository,
+    private val reusableExpensesRepository: ReusableExpensesRepository? = null
 ) : ViewModel() {
 
     private val retry = MutableStateFlow(0)
@@ -28,6 +39,117 @@ class BusinessViewModel(
 
     private val _uiState = MutableStateFlow(BusinessUiState())
     val uiState = _uiState.asStateFlow()
+
+    private val reusableExpensesRetry = MutableStateFlow(0)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val reusableExpensesUiState: StateFlow<ReusableExpensesUiState> = combine(
+        auth.currentUser.map { it?.uid }.distinctUntilChanged(),
+        uiState.map { it.selectedTab }.distinctUntilChanged(),
+        reusableExpensesRetry
+    ) { uid, tab, _ ->
+        uid to tab
+    }.flatMapLatest { (uid, tab) ->
+        if (tab == BusinessTab.GASTOS) {
+            observeReusableExpenses(uid)
+        } else {
+            flowOf(ReusableExpensesUiState())
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(
+            stopTimeoutMillis = 0,
+            replayExpirationMillis = 0
+        ),
+        initialValue = ReusableExpensesUiState()
+    )
+
+    private fun observeReusableExpenses(uid: String?): Flow<ReusableExpensesUiState> {
+        if (uid == null) {
+            return flowOf(
+                ReusableExpensesUiState(
+                    isLoading = false,
+                    errorMessage = "Inicia sesión para ver tus gastos reutilizables."
+                )
+            )
+        }
+
+        val repository = reusableExpensesRepository ?: return flowOf(
+            ReusableExpensesUiState(
+                isLoading = false,
+                errorMessage = "El catálogo de gastos no está disponible."
+            )
+        )
+
+        return flow {
+            emit(ReusableExpensesUiState())
+
+            repository.observeAll(uid).collect { result ->
+                if (auth.currentUser.value?.uid == uid) {
+                    emit(
+                        result.fold(
+                            onSuccess = { data ->
+                                ReusableExpensesUiState(
+                                    items = data.value,
+                                    isLoading = false,
+                                    fromCache = data.fromCache
+                                )
+                            },
+                            onFailure = { error ->
+                                ReusableExpensesUiState(
+                                    isLoading = false,
+                                    errorMessage = error.salesUserMessage()
+                                )
+                            }
+                        )
+                    )
+                }
+            }
+        }.catch { error ->
+            emit(
+                ReusableExpensesUiState(
+                    isLoading = false,
+                    errorMessage = error.salesUserMessage()
+                )
+            )
+        }
+    }
+
+    fun retryReusableExpenses() {
+        reusableExpensesRetry.update { it + 1 }
+    }
+
+    suspend fun createReusableExpense(
+        requestId: String,
+        name: String,
+        category: String,
+        suggestedAmountText: String
+    ): Result<Unit> {
+        val uid = auth.currentUser.value?.uid ?: return Result.failure(
+            DataValidationException("Inicia sesión para guardar un gasto reutilizable.")
+        )
+        val repository = reusableExpensesRepository ?: return Result.failure(
+            DataValidationException("El catálogo de gastos no está disponible.")
+        )
+
+        val amount = if (suggestedAmountText.isBlank()) {
+            null
+        } else {
+            parseClp(suggestedAmountText.trim()) ?: return Result.failure(
+                DataValidationException("Ingresa un monto válido en CLP o déjalo vacío.")
+            )
+        }
+
+        val expense = ReusableExpense(
+            id = requestId,
+            userId = uid,
+            name = name.trim(),
+            category = category.trim(),
+            suggestedAmount = amount
+        )
+
+        return repository.create(expense)
+    }
 
     init {
         viewModelScope.launch {
