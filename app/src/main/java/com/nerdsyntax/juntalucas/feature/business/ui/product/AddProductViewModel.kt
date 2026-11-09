@@ -3,6 +3,7 @@ package com.nerdsyntax.juntalucas.feature.business.ui.product
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestore
 import com.nerdsyntax.juntalucas.core.data.DataValidationException
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.MAX_QUANTITY
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 class AddProductViewModel(
@@ -39,7 +41,7 @@ class AddProductViewModel(
             costo = savedState["costo"] ?: "",
             descripcion = savedState["descripcion"] ?: "",
             stockActual = savedState["stockActual"] ?: "0",
-            stockMinimo = savedState["stockMinimo"] ?: "0",
+            stockMinimo = savedState["stockMinimo"] ?: "2",
             unidad = savedState["unidad"] ?: "unidad",
             isActive = savedState["isActive"] ?: true,
             trackStock = savedState["trackStock"] ?: true,
@@ -100,10 +102,10 @@ class AddProductViewModel(
 
     private fun change(transform: (AddProductUiState) -> AddProductUiState) {
         if (_uiState.value.isSaving || _uiState.value.isSuccess) return
-
         _uiState.update { transform(it).copy(errorMessage = null) }
         persist()
     }
+    fun ocultarPaywallSuscripcion() = change { it.copy(mostrarPaywallSuscripcion = false) }
 
     fun onIsProductChange(value: Boolean) = change { it.copy(isProduct = value) }
     fun onNombreChange(value: String) = change { it.copy(nombre = value) }
@@ -185,6 +187,34 @@ class AddProductViewModel(
         _uiState.update { it.copy(isSaving = true, errorMessage = null) }
 
         viewModelScope.launch {
+            val uid = owner ?: return@launch
+            if (initialProductId == null) {
+                try {
+                    val db = FirebaseFirestore.getInstance()
+
+                    val profileDoc = db.collection("users").document(uid).collection("business").document("profile").get().await()
+                    val susMap = profileDoc.get("suscripcion") as? Map<*, *>
+                    val plan = susMap?.get("plan") as? String ?: "FREE"
+
+                    if (plan == "FREE") {
+                        val snapshot = db.collection("users").document(uid).collection("products").get().await()
+                        val cantidadProductos = snapshot.size()
+                        if (cantidadProductos >= 50) {
+                            _uiState.update {
+                                it.copy(
+                                    isSaving = false,
+                                    mostrarPaywallSuscripcion = true,
+                                    errorMessage = null
+                                )
+                            }
+                            return@launch
+                        }
+                    }
+                } catch (e: Exception) {
+                }
+            }
+
+
             val productToSave = try {
                 val uri = state.selectedPhotoUri
                 if (uri == null) {

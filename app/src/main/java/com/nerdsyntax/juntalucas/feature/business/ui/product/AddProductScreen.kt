@@ -54,6 +54,9 @@ import java.io.File
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import kotlin.math.abs
+import com.nerdsyntax.juntalucas.feature.paywall.ui.LimitReachedDialog
+import com.nerdsyntax.juntalucas.feature.paywall.ui.PaywallScreen
+import androidx.compose.ui.window.Dialog
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
@@ -74,6 +77,7 @@ private val PurpleBg = Color(0xFFF5F3FF)
 @Composable
 fun AddProductScreen(
     state: AddProductUiState,
+    vm: AddProductViewModel,
     onIsProductChange: (Boolean) -> Unit,
     onNombreChange: (String) -> Unit,
     onCategoriaChange: (String) -> Unit,
@@ -93,7 +97,37 @@ fun AddProductScreen(
 
     val gananciaStr = (if (state.ganancia < 0) "-" else "") + "$" + formatter.format(abs(state.ganancia))
     val margenStr = "${state.margen.toInt()}%"
+    var mostrarPantallaPlanes by rememberSaveable { mutableStateOf(false) }
 
+    if (state.mostrarPaywallSuscripcion) {
+        LimitReachedDialog(
+            fechaReinicio = "próximo ciclo mensual",
+            onDismiss = {
+                vm.ocultarPaywallSuscripcion()
+            },
+            onUpgrade = {
+                vm.ocultarPaywallSuscripcion()
+                mostrarPantallaPlanes = true
+            }
+        )
+    }
+
+    if (mostrarPantallaPlanes) {
+        Dialog(
+            onDismissRequest = { mostrarPantallaPlanes = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            PaywallScreen(
+                onClose = { mostrarPantallaPlanes = false },
+                onSelectPlan = { planId ->
+                    mostrarPantallaPlanes = false
+                }
+            )
+        }
+    }
     Scaffold(
         topBar = {
             Column(
@@ -335,7 +369,6 @@ fun AddProductScreen(
         }
     }
 }
-//  COMPONENTES
 @Composable
 private fun ProductPhotoCard(
     isProduct: Boolean,
@@ -560,7 +593,6 @@ private fun decodeProductPreview(resolver: android.content.ContentResolver, uri:
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
-// Usa una autoridad propia para no interferir con otros proveedores de la app.
 class ProductPhotoFileProvider : FileProvider()
 
 private fun createProductPhotoUri(context: Context): Uri {

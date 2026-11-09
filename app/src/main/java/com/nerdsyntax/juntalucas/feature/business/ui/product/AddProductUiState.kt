@@ -19,7 +19,8 @@ data class AddProductUiState(
     val errorMessage: String? = null,
     val selectedPhotoUri: String? = null,
     val storedPhotoPath: String? = null,
-    val removeStoredPhoto: Boolean = false
+    val removeStoredPhoto: Boolean = false,
+    val mostrarPaywallSuscripcion: Boolean = false
 ) {
     val precioNum: Long get() = parseClp(precio) ?: 0L
     val costoNum: Long? get() = if (costo.isBlank()) null else parseClp(costo)

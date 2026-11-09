@@ -11,7 +11,6 @@ data class ProfileUiState(
     val biometriaEnabled: Boolean = false,
     val isUploadingPhoto: Boolean = false,
 
-    // ── Edición ──
     val isEditingUser: Boolean = false,
     val editNameInput: String = "",
     val isEditingBusiness: Boolean = false,

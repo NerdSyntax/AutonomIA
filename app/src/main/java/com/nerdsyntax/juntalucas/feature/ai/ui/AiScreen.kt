@@ -50,6 +50,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.nerdsyntax.juntalucas.feature.paywall.ui.LimitReachedDialog
+import com.nerdsyntax.juntalucas.feature.paywall.ui.PaywallScreen
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val HeaderGradientEnd = Color(0xFF1E3A5F)
@@ -86,6 +88,38 @@ fun AiScreen(
     vm: AiViewModel,
     onToggleBottomBar: (Boolean) -> Unit = {}
 ) {
+    var mostrarPantallaPlanes by remember { mutableStateOf(false) }
+
+    if (state.mostrarPaywallSuscripcion) {
+        LimitReachedDialog(
+            fechaReinicio = "tu próximo ciclo mensual",
+            onDismiss = {
+                vm.ocultarPaywallSuscripcion()
+            },
+            onUpgrade = {
+                vm.ocultarPaywallSuscripcion()
+                mostrarPantallaPlanes = true
+            }
+        )
+    }
+
+    if (mostrarPantallaPlanes) {
+        Dialog(
+            onDismissRequest = { mostrarPantallaPlanes = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            PaywallScreen(
+                onClose = { mostrarPantallaPlanes = false },
+                onSelectPlan = { planId ->
+                    mostrarPantallaPlanes = false
+                }
+            )
+        }
+    }
+
     LaunchedEffect(state.subScreen, state.isAnalyzing) {
         val shouldShowBar = state.subScreen == AiSubScreen.HOME && !state.isAnalyzing
         onToggleBottomBar(shouldShowBar)
@@ -100,6 +134,7 @@ fun AiScreen(
         AiLoadingScreen(state = state)
         return
     }
+
     when (state.subScreen) {
         AiSubScreen.CHATBOX -> {
             BackHandler { vm.abrirPantallaPrincipal() }

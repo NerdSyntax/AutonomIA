@@ -94,5 +94,6 @@ data class AiUiState(
     val currentReport: AiStructuredReport? = null,
     val historialAnalisis: List<AnalysisHistoryItem> = emptyList(),
     val chatMessages: List<ChatMessage> = emptyList(),
-    val isTyping: Boolean = false
+    val isTyping: Boolean = false,
+    val mostrarPaywallSuscripcion: Boolean = false
 )

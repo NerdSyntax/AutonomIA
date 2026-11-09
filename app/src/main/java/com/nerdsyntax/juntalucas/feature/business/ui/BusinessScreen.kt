@@ -275,7 +275,7 @@ private fun BusinessHeader(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StockAlertsButton(
+internal fun StockAlertsButton(
     alerts: List<ProductItem>,
     isLoading: Boolean,
     errorMessage: String?,

@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -60,6 +59,12 @@ fun AppNavigation() {
     val navController = rememberNavController()
     val openExpenseEditor: (String) -> Unit = { id ->
         navController.navigate("$EDIT_EXPENSE_PATH/${Uri.encode(id)}") {
+            launchSingleTop = true
+        }
+    }
+
+    val openProductEditor: (String) -> Unit = { id ->
+        navController.navigate("${Routes.ADD_PRODUCT}/${Uri.encode(id)}") {
             launchSingleTop = true
         }
     }
@@ -246,10 +251,18 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Routes.DASHBOARD) {
+            composable(Routes.DASHBOARD) { entry ->
                 if (!session.canAccessDashboard) return@composable
                 val vm: DashboardViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                val sharedEntry = remember(entry) {
+                    navController.getBackStackEntry(navController.graph.id)
+                }
+                val alertsVm: BusinessViewModel = viewModel(
+                    viewModelStoreOwner = sharedEntry,
+                    factory = factory
+                )
+                val alertsState by alertsVm.uiState.collectAsStateWithLifecycle()
                 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
 
                 DashboardScreen(
@@ -265,7 +278,18 @@ fun AppNavigation() {
                     onCustomStart = vm::onCustomStart,
                     onCustomEnd = vm::onCustomEnd,
                     onRetry = vm::refresh,
-                    onViewAll = { navController.navigateToBottomRoute(Routes.MOVEMENTS) }
+                    onViewAll = { navController.navigateToBottomRoute(Routes.MOVEMENTS) },
+                    onQuickAddSale = { navController.navigate(Routes.ADD_SALE) },
+                    onExportCsv = { context -> vm.exportarDatosCsv(context) },
+                    notifications = {
+                        StockAlertsButton(
+                            alerts = alertsState.stockAlerts,
+                            isLoading = alertsState.isLoading,
+                            errorMessage = alertsState.errorMessage,
+                            onEditProduct = openProductEditor,
+                            onRetry = alertsVm::retry
+                        )
+                    }
                 )
             }
 
@@ -393,9 +417,15 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Routes.BUSINESS) {
+            composable(Routes.BUSINESS) { entry ->
                 if (!session.canAccessDashboard) return@composable
-                val vm: BusinessViewModel = viewModel(factory = factory)
+                val sharedEntry = remember(entry) {
+                    navController.getBackStackEntry(navController.graph.id)
+                }
+                val vm: BusinessViewModel = viewModel(
+                    viewModelStoreOwner = sharedEntry,
+                    factory = factory
+                )
                 val state by vm.uiState.collectAsStateWithLifecycle()
                 val user by authRepository.currentUser.collectAsStateWithLifecycle()
                 var expenseHistoryRetry by remember { mutableStateOf(0) }
@@ -411,7 +441,7 @@ fun AppNavigation() {
                     onSearchChange = vm::onSearchChange,
                     onFilterSelected = vm::onFilterSelected,
                     onAddClick = { navController.navigate(Routes.ADD_PRODUCT) },
-                    onEditProduct = { id -> navController.navigate("${Routes.ADD_PRODUCT}/$id") },
+                    onEditProduct = openProductEditor,
                     onDeactivateProduct = vm::toggleActive,
                     onRetry = vm::retry,
                     onStartEditingBusiness = vm::startEditingBusiness,
@@ -443,6 +473,7 @@ fun AppNavigation() {
 
                 AddProductScreen(
                     state = state,
+                    vm = vm,
                     onIsProductChange = vm::onIsProductChange,
                     onNombreChange = vm::onNombreChange,
                     onCategoriaChange = vm::onCategoriaChange,
@@ -464,9 +495,14 @@ fun AppNavigation() {
                 val productId = entry.arguments?.getString("productId")
                 val vm: AddProductViewModel = viewModel(factory = ProductViewModelFactory(authRepository, AppContainer.catalogRepository, productId))
                 val state by vm.uiState.collectAsStateWithLifecycle()
-                LaunchedEffect(state.isSuccess) { if (state.isSuccess) navController.popBackStack() }
+
+                LaunchedEffect(state.isSuccess) {
+                    if (state.isSuccess) navController.popBackStack()
+                }
+
                 AddProductScreen(
                     state = state,
+                    vm = vm,
                     onIsProductChange = vm::onIsProductChange,
                     onNombreChange = vm::onNombreChange,
                     onCategoriaChange = vm::onCategoriaChange,
@@ -482,6 +518,7 @@ fun AppNavigation() {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
             composable(Routes.AI) {
                 if (!session.canAccessDashboard) return@composable
                 val vm: AiViewModel = viewModel(factory = factory)

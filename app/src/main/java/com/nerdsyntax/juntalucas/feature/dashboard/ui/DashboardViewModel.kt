@@ -3,6 +3,7 @@ package com.nerdsyntax.juntalucas.feature.dashboard.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
@@ -14,11 +15,13 @@ import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriods
 import com.nerdsyntax.juntalucas.feature.movements.domain.Expense
 import com.nerdsyntax.juntalucas.feature.movements.domain.ExpensesRepository
 import com.nerdsyntax.juntalucas.feature.movements.domain.Sale
+import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
 import com.nerdsyntax.juntalucas.feature.movements.domain.SalesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -39,6 +42,7 @@ class DashboardViewModel(
     )
 
     private val retry = MutableStateFlow(0)
+    private var planSimuladoTemporal: String? = null
 
     private val _uiState = MutableStateFlow(
         DashboardUiState(isLoading = true)
@@ -77,6 +81,11 @@ class DashboardViewModel(
                             _uiState.update { it.copy(userName = name) }
                         }
                     }
+                    launch {
+                        observeSubscriptionPlan(uid).collect { plan ->
+                            _uiState.update { it.copy(planActual = plan) }
+                        }
+                    }
                     combine(
                         periodSelection,
                         retry
@@ -89,9 +98,6 @@ class DashboardViewModel(
         }
     }
 
-    /**
-     * Flujo reactivo que extrae y escucha el nombre del usuario desde Firestore y Auth.
-     */
     private fun observeUserName(uid: String): Flow<String> = callbackFlow {
         val authUser = authRepository.currentUser.value
         val rawAuthName = authUser?.displayName ?: authUser?.email?.substringBefore("@")
@@ -103,25 +109,40 @@ class DashboardViewModel(
             .collection("users")
             .document(uid)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    return@addSnapshotListener
-                }
-
+                if (error != null) return@addSnapshotListener
                 if (snapshot != null && snapshot.exists()) {
                     val rawFirestore = listOf("name", "nombre", "firstName", "fullName", "displayName", "userName")
                         .firstNotNullOfOrNull { snapshot.getString(it) }
-
                     val firestoreName = extraerPrimerNombre(rawFirestore)
                     trySend(firestoreName ?: initialName)
                 }
             }
-
         awaitClose { listener.remove() }
     }
 
-    /**
-     * Función robusta para limpiar el nombre extrayendo solo la primera palabra útil.
-     */
+    private fun observeSubscriptionPlan(uid: String): Flow<String> = callbackFlow {
+        trySend("FREE")
+        val listener = FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(uid)
+            .collection("business")
+            .document("profile")
+            .addSnapshotListener { snapshot, error ->
+                if (planSimuladoTemporal != null) {
+                    trySend(planSimuladoTemporal!!)
+                    return@addSnapshotListener
+                }
+
+                if (error != null) return@addSnapshotListener
+                if (snapshot != null && snapshot.exists()) {
+                    val susMap = snapshot.get("suscripcion") as? Map<*, *>
+                    val plan = susMap?.get("plan") as? String ?: "FREE"
+                    trySend(plan)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
     private fun extraerPrimerNombre(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
         val limpio = raw.trim()
@@ -159,14 +180,6 @@ class DashboardViewModel(
         }
     }
 
-    /**
-    - Aplica el filtro y sus fechas en una sola actualización.
-
-    - start y end usan formato yyyy-MM-dd.
-
-    - end es inclusivo: ese día también se consulta.
-
-     */
     fun applyPeriod(
         selected: DashboardPeriodFilter,
         start: String,
@@ -176,32 +189,17 @@ class DashboardViewModel(
             val anchor = LocalDate.parse(start)
 
             val first = when (selected) {
-                DashboardPeriodFilter.WEEK ->
-                    anchor.minusDays(
-                        (anchor.dayOfWeek.value - 1).toLong()
-                    )
-
-                DashboardPeriodFilter.MONTH ->
-                    anchor.withDayOfMonth(1)
-
-                DashboardPeriodFilter.YEAR ->
-                    anchor.withDayOfYear(1)
-
+                DashboardPeriodFilter.WEEK -> anchor.minusDays((anchor.dayOfWeek.value - 1).toLong())
+                DashboardPeriodFilter.MONTH -> anchor.withDayOfMonth(1)
+                DashboardPeriodFilter.YEAR -> anchor.withDayOfYear(1)
                 DashboardPeriodFilter.CUSTOM -> anchor
             }
 
             val last = when (selected) {
-                DashboardPeriodFilter.WEEK ->
-                    first.plusDays(6)
-
-                DashboardPeriodFilter.MONTH ->
-                    first.plusMonths(1).minusDays(1)
-
-                DashboardPeriodFilter.YEAR ->
-                    first.plusYears(1).minusDays(1)
-
-                DashboardPeriodFilter.CUSTOM ->
-                    LocalDate.parse(end)
+                DashboardPeriodFilter.WEEK -> first.plusDays(6)
+                DashboardPeriodFilter.MONTH -> first.plusMonths(1).minusDays(1)
+                DashboardPeriodFilter.YEAR -> first.plusYears(1).minusDays(1)
+                DashboardPeriodFilter.CUSTOM -> LocalDate.parse(end)
             }
 
             require(!last.isBefore(first))
@@ -226,14 +224,159 @@ class DashboardViewModel(
     }
 
     fun onCustomStart(value: String) {
-        _uiState.update {
-            it.copy(customStart = value)
-        }
+        _uiState.update { it.copy(customStart = value) }
     }
 
     fun onCustomEnd(value: String) {
-        _uiState.update {
-            it.copy(customEnd = value)
+        _uiState.update { it.copy(customEnd = value) }
+    }
+
+    fun mostrarPaywall() {
+        _uiState.update { it.copy(mostrarPaywallSuscripcion = true, mensajePaywallPersonalizado = null) }
+    }
+
+    fun ocultarPaywall() {
+        _uiState.update { it.copy(mostrarPaywallSuscripcion = false, mensajePaywallPersonalizado = null) }
+    }
+    fun simularCompra(planId: String) {
+        val uid = authRepository.currentUser.value?.uid ?: return
+        planSimuladoTemporal = planId
+        _uiState.update { it.copy(planActual = planId) }
+        ocultarPaywall()
+
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val profileRef = db.collection("users").document(uid).collection("business").document("profile")
+                val data = mapOf("suscripcion" to mapOf("plan" to planId))
+                profileRef.set(data, SetOptions.merge()).await()
+            } catch (e: Exception) {
+                android.util.Log.e("DashboardVM", "Escritura bloqueada por reglas de Firebase: ${e.message}")
+            }
+        }
+    }
+
+    fun exportarDatosCsv(context: android.content.Context) {
+        if (salesRepository == null || expensesRepository == null) {
+            _uiState.update { it.copy(errorMessage = "Datos de repositorio no disponibles para exportar.") }
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val uid = authRepository.currentUser.value?.uid
+                if (uid == null) {
+                    _uiState.update { it.copy(errorMessage = "Debes iniciar sesión para exportar.") }
+                    return@launch
+                }
+
+                val currentPlan = _uiState.value.planActual
+                val selectedFilter = periodSelection.value.filter
+                val startDate = LocalDate.parse(periodSelection.value.start)
+                val today = LocalDate.parse(DashboardPeriods.today())
+
+                val isCurrentMonth = startDate.year == today.year && startDate.month == today.month
+                val sixMonthsAgo = today.minusMonths(5).withDayOfMonth(1)
+
+                if (currentPlan == "FREE") {
+                    if (!isCurrentMonth || selectedFilter == DashboardPeriodFilter.YEAR || selectedFilter == DashboardPeriodFilter.CUSTOM) {
+                        _uiState.update {
+                            it.copy(
+                                mostrarPaywallSuscripcion = true,
+                                mensajePaywallPersonalizado = "Tu plan Gratis solo te permite exportar el mes en curso. Para descargar historial de meses anteriores, mejora tu plan a Plus o Pro."
+                            )
+                        }
+                        return@launch
+                    }
+                }
+
+                if (currentPlan == "PLUS") {
+                    if (startDate.isBefore(sixMonthsAgo) || selectedFilter == DashboardPeriodFilter.YEAR || selectedFilter == DashboardPeriodFilter.CUSTOM) {
+                        _uiState.update {
+                            it.copy(
+                                mostrarPaywallSuscripcion = true,
+                                mensajePaywallPersonalizado = "Tu plan Plus permite exportar hasta los últimos 6 meses. La exportación histórica completa es exclusiva del plan Pro."
+                            )
+                        }
+                        return@launch
+                    }
+                }
+
+                val nombreNegocio = _uiState.value.nombreNegocio.ifBlank { "Mi Negocio" }
+                val metaMensual = _uiState.value.metaMensual
+
+                val start = periodSelection.value.start
+                val endExclusive = LocalDate.parse(periodSelection.value.end).plusDays(1).toString()
+
+                val salesResult = salesRepository.observeRange(uid, start, endExclusive).first()
+                val expensesResult = expensesRepository.observeRange(uid, start, endExclusive).first()
+
+                val sales = salesResult.getOrNull()?.value ?: emptyList()
+                val expenses = expensesResult.getOrNull()?.value ?: emptyList()
+
+                val csvContent = buildString {
+                    appendLine("sep=;")
+                    appendLine("REPORTE FINANCIERO - ${nombreNegocio.uppercase()}")
+                    appendLine("Periodo exportado:;${start} al ${periodSelection.value.end}")
+                    appendLine("Meta mensual configurada:;$metaMensual")
+                    appendLine()
+
+                    appendLine("VENTAS;;;;;GASTOS;;;;")
+                    appendLine("FECHA;PRODUCTO;MONTO;MEDIO PAGO;;FECHA;DESCRIPCION;CATEGORIA;MONTO;MEDIO PAGO")
+
+                    val sortedSales = sales.sortedByDescending { it.draft.saleDate }
+                    val sortedExpenses = expenses.sortedByDescending { it.draft.expenseDate }
+
+                    val maxRows = maxOf(sortedSales.size, sortedExpenses.size)
+
+                    for (i in 0 until maxRows) {
+                        val sale = sortedSales.getOrNull(i)
+                        val expense = sortedExpenses.getOrNull(i)
+
+                        val saleCols = if (sale != null) {
+                            val nombre = sale.productName.replace(";", ",")
+                            "${sale.draft.saleDate};$nombre;${sale.draft.total};${sale.draft.paymentMethod.label}"
+                        } else {
+                            ";;;"
+                        }
+
+                        val sepCol = ""
+
+                        val expenseCols = if (expense != null) {
+                            val desc = expense.draft.description.replace(";", ",")
+                            val cat = expense.draft.category.replace(";", ",")
+                            "${expense.draft.expenseDate};$desc;$cat;${expense.draft.amount};${expense.draft.paymentMethod.label}"
+                        } else {
+                            ";;;;"
+                        }
+
+                        appendLine("$saleCols;$sepCol;$expenseCols")
+                    }
+                }
+
+                val fileName = "Reporte_${nombreNegocio.replace(" ", "_")}_${start}_${periodSelection.value.end}.csv"
+                val file = java.io.File(context.cacheDir, fileName)
+                file.writeText("\uFEFF$csvContent", Charsets.UTF_8)
+
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    file
+                )
+
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Reporte Financiero ${periodSelection.value.end}")
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                context.startActivity(android.content.Intent.createChooser(intent, "Exportar movimientos"))
+
+            } catch (e: Exception) {
+                android.util.Log.e("DashboardVM", "Error al generar CSV", e)
+                _uiState.update { it.copy(errorMessage = "Error al exportar los datos.") }
+            }
         }
     }
 
@@ -254,60 +397,32 @@ class DashboardViewModel(
         return runCatching {
             val start = LocalDate.parse(selection.start)
             val end = LocalDate.parse(selection.end)
-
             require(!end.isBefore(start))
-
-            DashboardDateRange(
-                start = start.toString(),
-                endExclusive = end.plusDays(1).toString()
-            )
+            DashboardDateRange(start = start.toString(), endExclusive = end.plusDays(1).toString())
         }.getOrNull()
     }
 
     private fun periodLabel(selection: PeriodSelection): String {
-        val range = resolveRange(selection)
-            ?: return "Elegir fechas"
-
+        val range = resolveRange(selection) ?: return "Elegir fechas"
         val start = LocalDate.parse(range.start)
         val end = LocalDate.parse(range.endExclusive).minusDays(1)
 
         return when (selection.filter) {
             DashboardPeriodFilter.WEEK -> {
                 if (start.year == end.year && start.month == end.month) {
-                    val format = DateTimeFormatter.ofPattern(
-                        "MMM yy",
-                        locale
-                    )
-
-                    "${start.dayOfMonth}–${end.dayOfMonth} " +
-                            end.format(format).replace(".", "")
+                    val format = DateTimeFormatter.ofPattern("MMM yy", locale)
+                    "${start.dayOfMonth}–${end.dayOfMonth} " + end.format(format).replace(".", "")
                 } else {
-                    val format = DateTimeFormatter.ofPattern(
-                        "d/M/yy",
-                        locale
-                    )
-
+                    val format = DateTimeFormatter.ofPattern("d/M/yy", locale)
                     "${start.format(format)}–${end.format(format)}"
                 }
             }
-
             DashboardPeriodFilter.MONTH -> {
-                start.format(
-                    DateTimeFormatter.ofPattern("MMM yyyy", locale)
-                )
-                    .replace(".", "")
-                    .replaceFirstChar { it.uppercase(locale) }
+                start.format(DateTimeFormatter.ofPattern("MMM yyyy", locale)).replace(".", "").replaceFirstChar { it.uppercase(locale) }
             }
-
-            DashboardPeriodFilter.YEAR ->
-                start.year.toString()
-
+            DashboardPeriodFilter.YEAR -> start.year.toString()
             DashboardPeriodFilter.CUSTOM -> {
-                val format = DateTimeFormatter.ofPattern(
-                    "d/M/yy",
-                    locale
-                )
-
+                val format = DateTimeFormatter.ofPattern("d/M/yy", locale)
                 "${start.format(format)}–${end.format(format)}"
             }
         }
@@ -355,21 +470,15 @@ class DashboardViewModel(
             val expensesSource = expensesRepository
 
             if (salesSource == null || expensesSource == null) {
-                showError(
-                    "No se pudieron conectar los datos del negocio."
-                )
+                showError("No se pudieron conectar los datos del negocio.")
                 return
             }
 
             val businessResult = businessRepository.getBusiness()
-
-            if (authRepository.currentUser.value?.uid != uid) {
-                return
-            }
+            if (authRepository.currentUser.value?.uid != uid) return
 
             val business = businessResult.getOrNull()
-            val businessError = businessResult.exceptionOrNull()
-                ?.salesUserMessage()
+            val businessError = businessResult.exceptionOrNull()?.salesUserMessage()
 
             _uiState.update {
                 it.copy(
@@ -381,41 +490,21 @@ class DashboardViewModel(
             val currentMonthRange = DashboardPeriods.monthRange()
 
             val periodData = combine(
-                salesSource.observeRange(
-                    uid,
-                    range.start,
-                    range.endExclusive
-                ),
-                expensesSource.observeRange(
-                    uid,
-                    range.start,
-                    range.endExclusive
-                )
+                salesSource.observeRange(uid, range.start, range.endExclusive),
+                expensesSource.observeRange(uid, range.start, range.endExclusive)
             ) { salesResult, expensesResult ->
                 salesResult to expensesResult
             }
 
             combine(
                 periodData,
-                salesSource.observeRange(
-                    uid,
-                    currentMonthRange.start,
-                    currentMonthRange.endExclusive
-                )
+                salesSource.observeRange(uid, currentMonthRange.start, currentMonthRange.endExclusive)
             ) { periodResults, monthlyResult ->
-                Triple(
-                    periodResults.first,
-                    periodResults.second,
-                    monthlyResult
-                )
+                Triple(periodResults.first, periodResults.second, monthlyResult)
             }.collect { (salesResult, expensesResult, monthlyResult) ->
-                if (authRepository.currentUser.value?.uid != uid) {
-                    return@collect
-                }
+                if (authRepository.currentUser.value?.uid != uid) return@collect
 
-                val periodError = salesResult.exceptionOrNull()
-                    ?: expensesResult.exceptionOrNull()
-
+                val periodError = salesResult.exceptionOrNull() ?: expensesResult.exceptionOrNull()
                 if (periodError != null) {
                     showError(periodError.salesUserMessage())
                     return@collect
@@ -424,10 +513,7 @@ class DashboardViewModel(
                 val salesData = salesResult.getOrThrow()
                 val expensesData = expensesResult.getOrThrow()
                 val monthlyData = monthlyResult.getOrNull()
-
-                val additionalError =
-                    monthlyResult.exceptionOrNull()?.salesUserMessage()
-                        ?: businessError
+                val additionalError = monthlyResult.exceptionOrNull()?.salesUserMessage() ?: businessError
 
                 render(
                     selection = selection,
@@ -436,11 +522,8 @@ class DashboardViewModel(
                     sales = salesData.value,
                     expenses = expensesData.value,
                     monthlySales = monthlyData?.value.orEmpty(),
-                    fromCache = salesData.fromCache ||
-                            expensesData.fromCache ||
-                            (monthlyData?.fromCache == true),
-                    periodFromCache = salesData.fromCache ||
-                            expensesData.fromCache,
+                    fromCache = salesData.fromCache || expensesData.fromCache || (monthlyData?.fromCache == true),
+                    periodFromCache = salesData.fromCache || expensesData.fromCache,
                     additionalError = additionalError
                 )
             }

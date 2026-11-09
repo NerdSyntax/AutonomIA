@@ -1,10 +1,9 @@
 package com.nerdsyntax.juntalucas.feature.dashboard.ui
 
+import android.app.DatePickerDialog
+import android.content.Context
 import androidx.compose.foundation.background
-import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.BusinessPieChartCard
-import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodSelector
 import androidx.compose.foundation.clickable
-import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,25 +11,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.BusinessPieChartCard
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardCharts
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardPeriodSelector
+import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.ExpenseDistributionCard
+import com.nerdsyntax.juntalucas.feature.paywall.ui.LimitReachedDialog
+import com.nerdsyntax.juntalucas.feature.paywall.ui.PaywallScreen
 import java.text.NumberFormat
 import java.util.Locale
-import androidx.compose.material.icons.filled.AutoAwesome
-import android.app.DatePickerDialog
-import androidx.compose.ui.platform.LocalContext
-import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
-import androidx.compose.runtime.*
-import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.DashboardCharts
-import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.ExpenseDistributionCard
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
@@ -38,7 +42,10 @@ private val GreenPos = Color(0xFF10B981)
 private val RedNeg = Color(0xFFEF4444)
 private val OrangeWarn = Color(0xFFF59E0B)
 private val PurpleAi = Color(0xFF8B5CF6)
-
+private val GradientPurpleStart = Color(0xFF6366F1)
+private val GradientPurpleEnd = Color(0xFF9333EA)
+private val SilverStart = Color(0xFFE2E8F0)
+private val SilverEnd = Color(0xFF94A3B8)
 
 @Composable
 fun DashboardScreen(
@@ -50,8 +57,48 @@ fun DashboardScreen(
     onCustomStart: (String) -> Unit = {},
     onCustomEnd: (String) -> Unit = {},
     onRetry: () -> Unit = {},
-    onViewAll: () -> Unit = {}
+    onViewAll: () -> Unit = {},
+    onQuickAddSale: () -> Unit = {},
+    onExportCsv: (Context) -> Unit = {},
+    notifications: @Composable () -> Unit = {},
+    viewModel: DashboardViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+
+    var mostrarPantallaPlanes by rememberSaveable { mutableStateOf(false) }
+
+    if (state.mostrarPaywallSuscripcion) {
+        LimitReachedDialog(
+            fechaReinicio = "próximo ciclo mensual",
+            customMessage = state.mensajePaywallPersonalizado,
+            onDismiss = {
+                viewModel.ocultarPaywall()
+            },
+            onUpgrade = {
+                viewModel.ocultarPaywall()
+                mostrarPantallaPlanes = true
+            }
+        )
+    }
+
+    if (mostrarPantallaPlanes) {
+        Dialog(
+            onDismissRequest = { mostrarPantallaPlanes = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            PaywallScreen(
+                onClose = { mostrarPantallaPlanes = false },
+                onSelectPlan = { planId ->
+                    viewModel.simularCompra(planId)
+                    mostrarPantallaPlanes = false
+                }
+            )
+        }
+    }
+
     if (state.isLoading) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -62,77 +109,162 @@ fun DashboardScreen(
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(LightBg)
-            .verticalScroll(rememberScrollState())
-    ) {
-        HeaderSection(
-            state = state,
-            onFilterSelected = onFilterSelected,
-            onPeriodApplied = onPeriodApplied
-        )
-
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxSize()
+                .background(LightBg)
+                .verticalScroll(rememberScrollState())
         ) {
-            state.errorMessage?.let { message ->
-                Column {
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error
-                    )
+            HeaderSection(
+                state = state,
+                onFilterSelected = onFilterSelected,
+                onPeriodApplied = onPeriodApplied,
+                notifications = notifications,
+                onBadgeClick = { mostrarPantallaPlanes = true }
+            )
 
-                    TextButton(onClick = onRetry) {
-                        Text("Reintentar")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                state.errorMessage?.let { message ->
+                    Column {
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error
+                        )
+
+                        TextButton(onClick = onRetry) {
+                            Text("Reintentar")
+                        }
                     }
                 }
+
+                GoalSection(state)
+
+                KpiGridSection(state)
+
+                AiAccessSection(
+                    onChatClick = onNavigateToAi,
+                    onMonthlyClick = onNavigateToMonthlyAnalysis
+                )
+
+                DashboardCharts(
+                    state = state,
+                    onRetry = onRetry
+                )
+                ExpenseDistributionCard(
+                    categorias = state.distribucionGastos,
+                    productos = state.ventasPorProducto,
+                    isLoading = state.graficosCargando,
+                    errorMessage = state.errorGraficos
+                )
+                BusinessPieChartCard(
+                    categorias = state.distribucionGastos,
+                    productos = state.ventasPorProducto,
+                    isLoading = state.graficosCargando,
+                    errorMessage = state.errorGraficos
+                )
+
+                RecentMovementsSection(
+                    movimientos = state.movimientosRecientes,
+                    onViewAll = onViewAll
+                )
+
+                Button(
+                    onClick = { onExportCsv(context) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPos)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FileDownload,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Exportar CSV",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(84.dp))
             }
+        }
 
-            GoalSection(state)
-
-            KpiGridSection(state)
-
-            AiAccessSection(
-                onChatClick = onNavigateToAi,
-                onMonthlyClick = onNavigateToMonthlyAnalysis
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(Brush.horizontalGradient(listOf(GradientPurpleStart, GradientPurpleEnd)))
+                .clickable { onQuickAddSale() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Registrar nueva venta",
+                tint = Color.White,
+                modifier = Modifier.size(32.dp)
             )
-
-            DashboardCharts(
-                state = state,
-                onRetry = onRetry
-            )
-            ExpenseDistributionCard(
-                categorias = state.distribucionGastos,
-                productos = state.ventasPorProducto,
-                isLoading = state.graficosCargando,
-                errorMessage = state.errorGraficos
-            )
-            BusinessPieChartCard(
-                categorias = state.distribucionGastos,
-                productos = state.ventasPorProducto,
-                isLoading = state.graficosCargando,
-                errorMessage = state.errorGraficos
-            )
-
-            RecentMovementsSection(
-                movimientos = state.movimientosRecientes,
-                onViewAll = onViewAll
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
+
+@Composable
+private fun PlanBadge(plan: String, onClick: () -> Unit) {
+    val (texto, brush, textColor) = when (plan) {
+        "PRO" -> Triple(
+            "Pro",
+            Brush.horizontalGradient(listOf(SilverStart, SilverEnd)),
+            DarkBlue
+        )
+        "PLUS" -> Triple(
+            "Plus",
+            Brush.horizontalGradient(listOf(GradientPurpleStart, GradientPurpleEnd)),
+            Color.White
+        )
+        else -> Triple(
+            "Gratis",
+            Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.2f))),
+            Color.White.copy(alpha = 0.9f)
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(brush)
+            .clickable(enabled = plan == "FREE" || plan == "PLUS", onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = texto,
+            color = textColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
 @Composable
 private fun HeaderSection(
     state: DashboardUiState,
     onFilterSelected: (DashboardPeriodFilter) -> Unit,
-    onPeriodApplied: (DashboardPeriodFilter, String, String) -> Unit
+    onPeriodApplied: (DashboardPeriodFilter, String, String) -> Unit,
+    notifications: @Composable () -> Unit,
+    onBadgeClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -158,43 +290,26 @@ private fun HeaderSection(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = "Hola, ${state.userName}",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Hola, ${state.userName}",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    PlanBadge(plan = state.planActual, onClick = onBadgeClick)
+                }
                 Text(
                     text = state.nombreNegocio,
                     color = Color.White,
                     fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = {
-                        // Pendiente: conectar con las notificaciones.
-                    },
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.15f),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Notificaciones",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
+            notifications()
         }
 
         DashboardPeriodSelector(
@@ -434,9 +549,6 @@ private fun KpiCard(
     }
 }
 
-
-
-
 @Composable
 private fun AiAccessSection(
     onChatClick: () -> Unit,
@@ -491,7 +603,6 @@ private fun AiAccessSection(
                     fontWeight = FontWeight.Bold
                 )
 
-
                 Text(
                     text = "Analiza y conversa acerca del rendimiento de tu negocio",
                     color = Color.White.copy(alpha = 0.9f),
@@ -510,6 +621,7 @@ private fun AiAccessSection(
         }
     }
 }
+
 @Composable
 private fun RecentMovementsSection(movimientos: List<MovimientoUi>, onViewAll: () -> Unit) {
     Card(

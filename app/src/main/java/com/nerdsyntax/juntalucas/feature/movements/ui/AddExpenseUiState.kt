@@ -14,5 +14,6 @@ data class AddExpenseUiState(
     val note: String = "",
     val isSaving: Boolean = false,
     val isSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val mostrarPaywallSuscripcion: Boolean = false
 )

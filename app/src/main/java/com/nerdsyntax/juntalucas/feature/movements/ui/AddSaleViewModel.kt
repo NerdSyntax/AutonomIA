@@ -3,6 +3,7 @@ package com.nerdsyntax.juntalucas.feature.movements.ui
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestore
 import com.nerdsyntax.juntalucas.core.data.DataValidationException
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.parseClp
@@ -13,6 +14,7 @@ import com.nerdsyntax.juntalucas.feature.movements.domain.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 class AddSaleViewModel(
@@ -143,6 +145,8 @@ class AddSaleViewModel(
         persist()
     }
 
+    fun ocultarPaywallSuscripcion() = change { it.copy(mostrarPaywallSuscripcion = false) }
+
     fun onDateChange(value: String) = change { it.copy(date = value) }
     fun onQuantityChange(value: String) = change { it.copy(quantity = value) }
     fun onPriceChange(value: String) = change { it.copy(unitPrice = value) }
@@ -199,7 +203,46 @@ class AddSaleViewModel(
 
         persist()
         _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+
         saveJob = viewModelScope.launch {
+            if (!isEditing) {
+                try {
+                    val db = FirebaseFirestore.getInstance()
+
+                    val profileDoc = db.collection("users").document(uid).collection("business").document("profile").get().await()
+                    val susMap = profileDoc.get("suscripcion") as? Map<*, *>
+                    val plan = susMap?.get("plan") as? String ?: "FREE"
+
+                    if (plan == "FREE") {
+                        val currentMonthPrefix = SaleDates.today().take(7)
+
+                        val ventasDelMes = db.collection("users").document(uid).collection("sales")
+                            .whereGreaterThanOrEqualTo("saleDate", "$currentMonthPrefix-01")
+                            .whereLessThanOrEqualTo("saleDate", "$currentMonthPrefix-31")
+                            .get().await().size()
+
+                        val gastosDelMes = db.collection("users").document(uid).collection("expenses")
+                            .whereGreaterThanOrEqualTo("expenseDate", "$currentMonthPrefix-01")
+                            .whereLessThanOrEqualTo("expenseDate", "$currentMonthPrefix-31")
+                            .get().await().size()
+
+                        val totalMovimientosMes = ventasDelMes + gastosDelMes
+
+                        if (totalMovimientosMes >= 100) {
+                            _uiState.update {
+                                it.copy(
+                                    isSaving = false,
+                                    mostrarPaywallSuscripcion = true,
+                                    errorMessage = null
+                                )
+                            }
+                            return@launch
+                        }
+                    }
+                } catch (e: Exception) {
+                }
+            }
+
             val result = if (isEditing) sales.update(draft) else sales.save(draft)
             if (auth.currentUser.value?.uid != draft.userId || owner != draft.userId) return@launch
             result.fold(

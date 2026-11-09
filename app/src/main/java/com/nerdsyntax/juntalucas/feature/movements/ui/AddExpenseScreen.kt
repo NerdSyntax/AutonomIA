@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,8 +28,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.movements.domain.*
+import com.nerdsyntax.juntalucas.feature.paywall.ui.LimitReachedDialog
+import com.nerdsyntax.juntalucas.feature.paywall.ui.PaywallScreen
 import java.util.Locale
 
 private val DarkBlue = Color(0xFF0F2A4A)
@@ -60,10 +65,47 @@ fun AddExpenseScreen(
     onNoteChange: (String) -> Unit,
     onSave: () -> Unit,
     onNavigateBack: () -> Unit,
-    suggestions: List<ExpenseSuggestion>? = null
+    suggestions: List<ExpenseSuggestion>? = null,
+    // ---> AGREGADO: Viewmodel inyectado para controlar el cierre de la alerta
+    viewModel: AddExpenseViewModel = viewModel()
 ) {
     val context = LocalContext.current
     BackHandler(enabled = state.isSaving) { }
+
+    // ---> AGREGADO: Lógica visual del Paywall <---
+    var mostrarPantallaPlanes by rememberSaveable { mutableStateOf(false) }
+
+    if (state.mostrarPaywallSuscripcion) {
+        LimitReachedDialog(
+            fechaReinicio = "próximo ciclo mensual",
+            customMessage = "Has registrado 100 movimientos (ventas o gastos) este mes. El plan Gratis solo permite 100 registros mensuales. Mejora a Plus para movimientos ilimitados.",
+            onDismiss = {
+                viewModel.ocultarPaywallSuscripcion()
+            },
+            onUpgrade = {
+                viewModel.ocultarPaywallSuscripcion()
+                mostrarPantallaPlanes = true
+            }
+        )
+    }
+
+    if (mostrarPantallaPlanes) {
+        Dialog(
+            onDismissRequest = { mostrarPantallaPlanes = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            PaywallScreen(
+                onClose = { mostrarPantallaPlanes = false },
+                onSelectPlan = { planId ->
+                    mostrarPantallaPlanes = false
+                }
+            )
+        }
+    }
+    // ---> FIN Lógica de Paywall <---
 
     Column(
         modifier = Modifier

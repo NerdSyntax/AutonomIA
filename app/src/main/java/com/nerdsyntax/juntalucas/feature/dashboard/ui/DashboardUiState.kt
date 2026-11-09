@@ -21,14 +21,13 @@ data class DashboardUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val gananciaBruta: Double? = null,
-
-    // Gráficos de ventas, gastos y ganancia bruta.
+    val planActual: String = "FREE",
+    val mostrarPaywallSuscripcion: Boolean = false,
+    val mensajePaywallPersonalizado: String? = null,
     val mesesGrafico: List<MesGraficoUi> = emptyList(),
     val graficosCargando: Boolean = true,
     val errorGraficos: String? = null,
     val graficosDesdeCache: Boolean = false,
-
-    // Gastos agrupados por categoría del periodo seleccionado.
     val distribucionGastos: List<GastoCategoriaUi> = emptyList(),
     val ventasPorProducto: List<VentaProductoUi> = emptyList(),
 )

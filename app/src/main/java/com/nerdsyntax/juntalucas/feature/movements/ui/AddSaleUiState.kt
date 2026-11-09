@@ -19,7 +19,8 @@ data class AddSaleUiState(
     val catalogFromCache: Boolean = false,
     val isSaving: Boolean = false,
     val isSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val mostrarPaywallSuscripcion: Boolean = false
 ) {
     val selectedProduct: CatalogProduct? get() = products.find { it.id == productId }
     val total: Long? get() = runCatching {

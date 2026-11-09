@@ -109,13 +109,22 @@ class AiViewModel(
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState = _uiState.asStateFlow()
 
-    // API KEY
-    //no subir a github sin borrarla antes
-    private val groqApiKey = "".trim()
+    //borrar api key antes de subir a github
+    private val groqApiKey = ""
 
     private var currentUid: String? = null
     private var nombreUsuario: String = "Usuario"
     private var nombreNegocio: String = "Mi Negocio"
+
+    data class Suscripcion(
+        val plan: String = "FREE",
+        val estado: String = "ACTIVO",
+        val consultasIaUsadas: Int = 0,
+        val diagnosticosUsados: Int = 0,
+        val fechaReinicio: String = ""
+    )
+
+    private var suscripcionActual: Suscripcion = Suscripcion()
 
     private var totalVentasClp: Long = 0L
     private var totalGastosClp: Long = 0L
@@ -164,6 +173,7 @@ class AiViewModel(
             runCatching { FirebaseAuth.getInstance().removeAuthStateListener(l) }
         }
     }
+
     private fun observarSesionYCargar() {
         val authFlow = authRepository?.currentUser
         if (authFlow != null) {
@@ -182,6 +192,7 @@ class AiViewModel(
         currentUid = uid
         nombreUsuario = "Usuario"
         nombreNegocio = "Mi Negocio"
+        suscripcionActual = Suscripcion()
         totalVentasClp = 0L
         totalGastosClp = 0L
         prevVentasClp = 0L
@@ -235,7 +246,6 @@ class AiViewModel(
         return uidActual
     }
 
-    /** Calcula un año hacia atrás (12 periodos) */
     private fun calcular12Periodos(): List<String> {
         val actual = runCatching { SaleDates.today().take(7) }.getOrElse { obtenerMesActualCodigo() }
         val periodos = mutableListOf(actual)
@@ -333,6 +343,11 @@ class AiViewModel(
             return
         }
 
+        if (!canGenerateDiagnostic()) {
+            _uiState.update { it.copy(mostrarPaywallSuscripcion = true) }
+            return
+        }
+
         viewModelScope.launch {
             try {
                 _uiState.update {
@@ -362,6 +377,8 @@ class AiViewModel(
                     balance = balance,
                     reporte = reporte
                 )
+
+                incrementarDiagnosticosFirebaseSilencioso()
 
                 _uiState.update {
                     it.copy(
@@ -410,7 +427,6 @@ class AiViewModel(
         cargarDatosPeriodo(codigo, uid)
     }
 
-
     private fun sincronizarReporteEnHistorial(nuevoReporte: AiStructuredReport) {
         val activas = nuevoReporte.recomendaciones.filter { !it.isDismissed }
         val aplicadas = activas.count { it.isApplied }
@@ -452,6 +468,7 @@ class AiViewModel(
             }
         }
     }
+
     private suspend fun construirReporteEnVivo(periodo: String): AiStructuredReport {
         val ventas = totalVentasClp
         val gastos = totalGastosClp
@@ -546,7 +563,6 @@ class AiViewModel(
               ]
             }
         """.trimIndent()
-
 
         val instruccionesHallazgos = """
             Tu tarea: elige los 3 hallazgos más importantes y útiles para este negocio (prioriza el mayor impacto y evita los que el cliente ya descartó) y redáctalos como recomendaciones claras y accionables. Usa SOLO las cifras entregadas; no inventes montos ni cálculos nuevos. Asigna "priority" según la urgencia real: HIGH, MEDIUM o LOW (HIGH solo para lo más urgente). Si el análisis adicional incluye SEGUIMIENTO, menciónalo en el diagnóstico.
@@ -840,6 +856,7 @@ class AiViewModel(
             lista.takeIf { it.isNotEmpty() }
         }.getOrNull()
     }
+
     private fun aplanarMapa(
         data: Map<*, *>,
         prefijo: String = "",
@@ -877,6 +894,7 @@ class AiViewModel(
         var negocioDetectado: String? = null
         var rubroDetectado: String? = null
         var metaDetectada: Long? = null
+        var suscripcionDetectada = Suscripcion()
 
         if (uid != null) {
             val db = FirebaseFirestore.getInstance()
@@ -886,6 +904,17 @@ class AiViewModel(
                 val data = doc.data ?: return
                 val planos = aplanarMapa(data)
                 planos.forEach { (ruta, valor) -> campos.add(CampoPerfil(doc.reference.path, ruta, valor)) }
+
+                val sus = doc.get("suscripcion") as? Map<*, *>
+                if (sus != null) {
+                    suscripcionDetectada = Suscripcion(
+                        plan = sus["plan"] as? String ?: "FREE",
+                        estado = sus["estado"] as? String ?: "ACTIVO",
+                        consultasIaUsadas = (sus["consultasIaUsadas"] as? Number)?.toInt() ?: 0,
+                        diagnosticosUsados = (sus["diagnosticosUsados"] as? Number)?.toInt() ?: 0,
+                        fechaReinicio = sus["fechaReinicio"] as? String ?: ""
+                    )
+                }
             }
 
             val userDoc = runCatching { db.collection("users").document(uid).get().await() }.getOrNull()
@@ -952,6 +981,7 @@ class AiViewModel(
 
         rubroNegocio = rubroDetectado.orEmpty()
         metaMensualClp = metaDetectada
+        suscripcionActual = suscripcionDetectada
 
         val rawEmail = repoUser?.email ?: firebaseUser?.email
         val nombreFinal = nombreDetectado ?: extraerPrimerNombre(rawEmail?.substringBefore("@")) ?: "Usuario"
@@ -967,8 +997,6 @@ class AiViewModel(
             ?: return null
         return limpio.lowercase().replaceFirstChar { it.uppercase() }
     }
-
-
 
     private fun agruparItems(pares: List<Pair<String, Long>>): List<ItemResumen> =
         pares
@@ -1167,6 +1195,7 @@ class AiViewModel(
             Log.e(TAG, "No se pudo limpiar el historial antiguo", it)
         }
     }
+
     private fun cargarDatosPeriodo(periodoCodigo: String, uidForzado: String? = null) {
         viewModelScope.launch {
             cargarDatosPeriodoSuspend(periodoCodigo, uidForzado)
@@ -1401,6 +1430,7 @@ class AiViewModel(
         }
         return ""
     }
+
     private fun fechaHoy(): String =
         runCatching { SaleDates.today() }.getOrElse { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
 
@@ -1543,7 +1573,6 @@ class AiViewModel(
         val hallazgos = mutableListOf<Hallazgo>()
         val notas = mutableListOf<String>()
 
-        // MARGEN DE PRODUCTO
         val rendimiento = rendimientoProductos(ventasAct)
         val conCosto = rendimiento.filter { it.utilidad != null }
         if (conCosto.isEmpty()) {
@@ -1620,7 +1649,6 @@ class AiViewModel(
                 }
         }
 
-        // PROYECCION DE LA META
         val meta = metaMensualClp
         if (meta != null && meta > 0L) {
             if (enCurso && dias < diasMes) {
@@ -1653,12 +1681,10 @@ class AiViewModel(
             }
         }
 
-        // GASTOS FIJOS VS VARIABLES
         val fijos = gastosAct.filter { it.tipo == "FIXED" }.sumOf { it.monto }
         val variables = gastosAct.filter { it.tipo == "VARIABLE" }.sumOf { it.monto }
         if (fijos > 0L && ventasTot > 0L) {
             val margenContribucion = 1.0 - (variables.toDouble() / ventasTot)
-
             if (margenContribucion > 0.05) {
                 val equilibrio = (fijos / margenContribucion).toLong()
                 val pctEquilibrio = ventasTot * 100 / equilibrio.coerceAtLeast(1L)
@@ -1680,7 +1706,6 @@ class AiViewModel(
             }
         }
 
-        //SEGUIMIENTO DE RECOMENDACIONES
         val estado = _uiState.value
         val historial = estado.historialAnalisis
         val reporteAnterior = historial.firstOrNull { it.periodo == estado.periodoComparacion }?.report
@@ -1701,7 +1726,6 @@ class AiViewModel(
             notas += "Recomendaciones que el cliente descartó antes (no las repitas): ${descartadas.take(6).joinToString("; ")}."
         }
 
-        // ALERTAS Y HALLAZGOS
         val catAct = gastosAct.groupBy { it.categoria.ifBlank { "Sin categoría" } }.mapValues { e -> e.value.sumOf { it.monto } }
         val catPrev = gastosPrev.groupBy { it.categoria.ifBlank { "Sin categoría" } }.mapValues { e -> e.value.sumOf { it.monto } }
         catAct.entries
@@ -1735,7 +1759,6 @@ class AiViewModel(
                 )
             }
 
-        // PRODUCTO CON VENTAS DECAYENTES
         if (avance >= 0.4) {
             val actuales = rendimiento.associateBy { it.clave }
             rendimientoProductos(ventasPrev)
@@ -1766,14 +1789,12 @@ class AiViewModel(
                 }
         }
 
-        // PRODUCTOS QUE NO SE HAN VENDIDO EN BASTANTE TIEMPO
         val vendidos = ventasDetalle.map { v -> v.productoId.ifBlank { v.producto } }.toSet()
         val sinMovimiento = catalogoDetalle.filter { it.activo && it.nombre.isNotBlank() && it.id !in vendidos }
         if (sinMovimiento.isNotEmpty()) {
             notas += "Productos activos del catálogo sin ventas en los últimos dos meses: ${sinMovimiento.take(6).joinToString(", ") { it.nombre }}."
         }
 
-        // PRODUCTOS CON DESCUENTO CON POCO MARGEN DE GANANCIA
         val descuentos = ventasAct.sumOf { it.descuento }
         val ventasBrutas = ventasTot + descuentos
         val pctDescuento = if (ventasBrutas > 0L) descuentos * 100 / ventasBrutas else 0L
@@ -1790,7 +1811,6 @@ class AiViewModel(
             )
         }
 
-        // MEJOR DIA DE LA SEMANAA
         if (ventasDetalle.size >= 15) {
             val desde = "$anterior-01"
             val hasta = if (enCurso) hoy.take(10) else "$periodo-${diasMes.toString().padStart(2, '0')}"
@@ -1825,7 +1845,6 @@ class AiViewModel(
             }
         }
 
-        // MEZCLA DE MEDIOS DE PAGO
         val totalTarjeta = ventasAct.filter { it.medioPago == "CREDIT" || it.medioPago == "DEBIT" }.sumOf { it.total }
         val pctTarjeta = if (ventasTot > 0L) totalTarjeta * 100 / ventasTot else 0L
         notas += "Medios de pago: el $pctTarjeta% de tus ventas del periodo fue con tarjeta."
@@ -2195,8 +2214,28 @@ class AiViewModel(
         }
     }
 
+    private fun canUseAiChat(): Boolean {
+        return when (suscripcionActual.plan) {
+            "PRO", "PLUS" -> true
+            else -> suscripcionActual.consultasIaUsadas < 15
+        }
+    }
+
+    private fun canGenerateDiagnostic(): Boolean {
+        return when (suscripcionActual.plan) {
+            "PRO" -> true
+            "PLUS" -> suscripcionActual.diagnosticosUsados < 4
+            else -> suscripcionActual.diagnosticosUsados < 1
+        }
+    }
+
     fun onSendMessage(userText: String) {
         if (userText.isBlank()) return
+
+        if (!canUseAiChat()) {
+            _uiState.update { it.copy(mostrarPaywallSuscripcion = true) }
+            return
+        }
 
         val userMessage = ChatMessage(text = userText.trim(), isFromUser = true)
         _uiState.update { it.copy(chatMessages = it.chatMessages + userMessage, isTyping = true) }
@@ -2221,10 +2260,86 @@ class AiViewModel(
                 "Tuve un problema procesando tu consulta. Intenta nuevamente en unos segundos."
             }
 
+            incrementarUsoIaFirebaseSilencioso()
+
             val iaMessage = ChatMessage(text = texto, isFromUser = false)
             _uiState.update { it.copy(chatMessages = it.chatMessages + iaMessage, isTyping = false) }
         }
     }
+
+    fun ocultarPaywallSuscripcion() {
+        _uiState.update { it.copy(mostrarPaywallSuscripcion = false) }
+    }
+
+    private fun incrementarUsoIaFirebaseSilencioso() {
+        val uid = currentUid ?: return
+        if (suscripcionActual.plan != "FREE") return
+
+        suscripcionActual = suscripcionActual.copy(
+            consultasIaUsadas = suscripcionActual.consultasIaUsadas + 1
+        )
+        Log.d("AutonomIA", "Mensajes de IA usados ahora: ${suscripcionActual.consultasIaUsadas}")
+
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val db = FirebaseFirestore.getInstance()
+                val docRef = db.collection("users").document(uid).collection("business").document("profile")
+
+                db.runTransaction { transaction ->
+                    val snapshot = transaction.get(docRef)
+                    if (snapshot.exists()) {
+                        val sus = snapshot.get("suscripcion") as? Map<String, Any>
+                        val usoChat = (sus?.get("consultasIaUsadas") as? Number)?.toInt() ?: 0
+                        val usoDiag = (sus?.get("diagnosticosUsados") as? Number)?.toInt() ?: 0
+
+                        val nuevoSuscripcion = mapOf(
+                            "plan" to (sus?.get("plan") as? String ?: "FREE"),
+                            "estado" to (sus?.get("estado") as? String ?: "ACTIVO"),
+                            "fechaReinicio" to (sus?.get("fechaReinicio") as? String ?: ""),
+                            "consultasIaUsadas" to usoChat + 1,
+                            "diagnosticosUsados" to usoDiag
+                        )
+                        transaction.update(docRef, "suscripcion", nuevoSuscripcion)
+                    }
+                }.await()
+            }
+        }
+    }
+
+    private fun incrementarDiagnosticosFirebaseSilencioso() {
+        val uid = currentUid ?: return
+        if (suscripcionActual.plan == "PRO") return
+
+        suscripcionActual = suscripcionActual.copy(
+            diagnosticosUsados = suscripcionActual.diagnosticosUsados + 1
+        )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val db = FirebaseFirestore.getInstance()
+                val docRef = db.collection("users").document(uid).collection("business").document("profile")
+
+                db.runTransaction { transaction ->
+                    val snapshot = transaction.get(docRef)
+                    if (snapshot.exists()) {
+                        val sus = snapshot.get("suscripcion") as? Map<String, Any>
+                        val usoChat = (sus?.get("consultasIaUsadas") as? Number)?.toInt() ?: 0
+                        val usoDiag = (sus?.get("diagnosticosUsados") as? Number)?.toInt() ?: 0
+
+                        val nuevoSuscripcion = mapOf(
+                            "plan" to (sus?.get("plan") as? String ?: "FREE"),
+                            "estado" to (sus?.get("estado") as? String ?: "ACTIVO"),
+                            "fechaReinicio" to (sus?.get("fechaReinicio") as? String ?: ""),
+                            "consultasIaUsadas" to usoChat,
+                            "diagnosticosUsados" to usoDiag + 1
+                        )
+                        transaction.update(docRef, "suscripcion", nuevoSuscripcion)
+                    }
+                }.await()
+            }
+        }
+    }
+
 
     private fun generarBienvenidaLocal(periodo: String, cantVentas: Int, cantGastos: Int, balance: Long): String {
         return if (cantVentas == 0 && cantGastos == 0) {
