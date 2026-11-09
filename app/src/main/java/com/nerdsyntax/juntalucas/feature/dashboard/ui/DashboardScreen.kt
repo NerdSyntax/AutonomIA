@@ -50,7 +50,8 @@ fun DashboardScreen(
     onCustomStart: (String) -> Unit = {},
     onCustomEnd: (String) -> Unit = {},
     onRetry: () -> Unit = {},
-    onViewAll: () -> Unit = {}
+    onViewAll: () -> Unit = {},
+    notifications: @Composable () -> Unit = {}
 ) {
     if (state.isLoading) {
         Box(
@@ -71,7 +72,8 @@ fun DashboardScreen(
         HeaderSection(
             state = state,
             onFilterSelected = onFilterSelected,
-            onPeriodApplied = onPeriodApplied
+            onPeriodApplied = onPeriodApplied,
+            notifications = notifications
         )
 
         Column(
@@ -132,7 +134,8 @@ fun DashboardScreen(
 private fun HeaderSection(
     state: DashboardUiState,
     onFilterSelected: (DashboardPeriodFilter) -> Unit,
-    onPeriodApplied: (DashboardPeriodFilter, String, String) -> Unit
+    onPeriodApplied: (DashboardPeriodFilter, String, String) -> Unit,
+    notifications: @Composable () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -173,28 +176,7 @@ private fun HeaderSection(
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = {
-                        // Pendiente: conectar con las notificaciones.
-                    },
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.15f),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Notificaciones",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
+            notifications()
         }
 
         DashboardPeriodSelector(
