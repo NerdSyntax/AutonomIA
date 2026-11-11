@@ -2,6 +2,7 @@ package com.nerdsyntax.juntalucas.feature.onboarding.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.Business
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessAuthenticationException
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
@@ -9,9 +10,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.nerdsyntax.juntalucas.feature.onboarding.data.OnboardingSampleData
 
-class OnboardingViewModel(private val businessRepository: BusinessRepository) : ViewModel() {
+class OnboardingViewModel(
+    private val authRepository: AuthRepository,
+    private val businessRepository: BusinessRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -22,7 +25,8 @@ class OnboardingViewModel(private val businessRepository: BusinessRepository) : 
     fun onMetaChange(meta: String) = _uiState.update { it.copy(metaMensual = meta) }
 
     fun onTipoActividadChange(tipo: String) = _uiState.update { it.copy(tipoActividad = tipo) }
-    fun onPuntoPartidaChange(punto: String) = _uiState.update { it.copy(puntoPartida = punto) }
+
+    fun onPlanChange(plan: String) = _uiState.update { it.copy(planSuscripcion = plan) }
 
     fun validarPaso1(): Boolean {
         val state = _uiState.value
@@ -33,9 +37,10 @@ class OnboardingViewModel(private val businessRepository: BusinessRepository) : 
         return true
     }
 
-    fun finalizarConfiguracion() {
-        if (_uiState.value.isLoading || _uiState.value.isSuccess || !validarPaso1()) return
+    fun finalizarConfiguracion(planElegido: String) {
+        if (_uiState.value.isLoading || _uiState.value.isSuccess) return
         val currentState = _uiState.value
+
         if (currentState.tipoActividad !in setOf("productos", "servicios", "ambos")) {
             _uiState.update { it.copy(errorMessage = "Selecciona el tipo de actividad de tu negocio.") }
             return
@@ -45,8 +50,15 @@ class OnboardingViewModel(private val businessRepository: BusinessRepository) : 
             _uiState.update { it.copy(errorMessage = "Ingresa una meta mensual válida, sin puntos ni comas.") }
             return
         }
-        _uiState.update { it.copy(isLoading = true, isSuccess = false, errorMessage = null) }
+
+        _uiState.update { it.copy(isLoading = true, isSuccess = false, errorMessage = null, planSuscripcion = planElegido) }
+
         viewModelScope.launch {
+            val uid = authRepository.currentUser.value?.uid
+            if (uid == null) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Error: Sesión no encontrada.") }
+                return@launch
+            }
             val result = businessRepository.saveBusiness(
                 Business(
                     nombreNegocio = currentState.nombreNegocio.trim(),
@@ -55,10 +67,12 @@ class OnboardingViewModel(private val businessRepository: BusinessRepository) : 
                     comuna = currentState.comuna.trim(),
                     metaMensual = meta,
                     tipoActividad = currentState.tipoActividad,
-                    puntoPartida = currentState.puntoPartida,
-                    onboardingCompleted = true
+                    puntoPartida = "manual",
+                    onboardingCompleted = true,
+                    suscripcion = com.nerdsyntax.juntalucas.feature.business.domain.Suscripcion(plan = planElegido)
                 )
             )
+
             if (result.isFailure) {
                 val message = if (result.exceptionOrNull() is BusinessAuthenticationException) {
                     "Tu sesión cambió o terminó. Vuelve a iniciar sesión para guardar tu negocio."
@@ -69,10 +83,7 @@ class OnboardingViewModel(private val businessRepository: BusinessRepository) : 
                 return@launch
             }
 
-            OnboardingSampleData.initialize(currentState.puntoPartida)
-
             _uiState.update { it.copy(isLoading = false, isSuccess = true) }
-
         }
     }
 }

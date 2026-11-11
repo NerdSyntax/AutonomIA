@@ -1,17 +1,26 @@
 package com.nerdsyntax.juntalucas.feature.onboarding.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+private val DarkBlue = Color(0xFF0F2A4A)
+private val LightBg = Color(0xFFF8FAFC)
+private val TextGray = Color(0xFF475569)
+private val BorderLight = Color(0xFFE2E8F0)
+private val BrandPurple = Color(0xFF7C3AED)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,97 +33,201 @@ fun BusinessInfoScreen(
     onMetaChange: (String) -> Unit,
     onContinueClick: () -> Unit
 ) {
-    val darkBlue = Color(0xFF0F2A4A)
-
-    Scaffold(
-        topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(darkBlue)
-                    .padding(top = 48.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
-            ) {
-                Text("Configuración inicial", color = Color.LightGray, fontSize = 14.sp)
-                Text("Cuéntanos sobre tu negocio", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-
-                Row(
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Box(modifier = Modifier.size(8.dp).background(Color.White, shape = CircleShape))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.size(8.dp).background(Color.Gray, shape = CircleShape))
-                }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBg)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = DarkBlue,
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+                .padding(top = 48.dp, bottom = 22.dp, start = 20.dp, end = 20.dp)
+        ) {
+            Column {
+                Text(
+                    text = "PASO 1 DE 3",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Cuéntanos sobre tu negocio",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
-    ) { paddingValues ->
+
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(
-                value = state.nombreNegocio,
-                onValueChange = onNombreChange,
-                label = { Text("Nombre del negocio *") },
-                placeholder = { Text("Pastelería Dulce Hogar") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                border = BorderStroke(0.5.dp, BorderLight),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "Información esencial",
+                        color = DarkBlue,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
 
-            OutlinedTextField(
-                value = state.rubro,
-                onValueChange = onRubroChange,
-                label = { Text("Rubro o categoría *") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+                    OnboardingTextField(
+                        label = "Nombre del negocio *",
+                        value = state.nombreNegocio,
+                        onValueChange = onNombreChange,
+                        placeholder = "Ej: Pastelería Dulce Hogar"
+                    )
 
-            OutlinedTextField(
-                value = state.region,
-                onValueChange = onRegionChange,
-                label = { Text("Región (opcional)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+                    OnboardingTextField(
+                        label = "Rubro o categoría *",
+                        value = state.rubro,
+                        onValueChange = onRubroChange,
+                        placeholder = "Ej: Repostería, Ferretería, etc."
+                    )
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                border = BorderStroke(0.5.dp, BorderLight),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "Datos opcionales",
+                        color = DarkBlue,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
 
-            OutlinedTextField(
-                value = state.comuna,
-                onValueChange = onComunaChange,
-                label = { Text("Comuna (opcional)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+                    OnboardingTextField(
+                        label = "Región",
+                        value = state.region,
+                        onValueChange = onRegionChange,
+                        placeholder = "Ej: Región Metropolitana"
+                    )
 
-            OutlinedTextField(
-                value = state.metaMensual,
-                onValueChange = onMetaChange,
-                label = { Text("Meta mensual de ventas (opcional)") },
-                supportingText = { Text("Moneda: Pesos chilenos (CLP)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+                    OnboardingTextField(
+                        label = "Comuna",
+                        value = state.comuna,
+                        onValueChange = onComunaChange,
+                        placeholder = "Ej: Providencia"
+                    )
 
+                    OnboardingTextField(
+                        label = "Meta mensual de ventas (CLP)",
+                        value = state.metaMensual,
+                        onValueChange = onMetaChange,
+                        placeholder = "Ej: 1500000",
+                        supportingText = "Solo números, sin puntos ni signos."
+                    )
+                }
+            }
             state.errorMessage?.let { error ->
-                Text(text = error, color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFFEF2F2),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = error,
+                        color = Color(0xFFB91C1C),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            Button(
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
                 onClick = onContinueClick,
+                shape = RoundedCornerShape(18.dp),
+                color = DarkBlue,
+                shadowElevation = 4.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = darkBlue)
+                    .height(56.dp)
             ) {
-                Text("Continuar", fontSize = 16.sp)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Continuar",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun OnboardingTextField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    supportingText: String? = null
+) {
+    Column {
+        Text(
+            text = label,
+            color = TextGray,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = TextGray.copy(alpha = 0.6f)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = BorderLight,
+                focusedBorderColor = BrandPurple,
+                unfocusedContainerColor = LightBg.copy(alpha = 0.5f),
+                focusedContainerColor = Color.White
+            )
+        )
+        if (supportingText != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = supportingText,
+                color = TextGray.copy(alpha = 0.8f),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(start = 4.dp)
+            )
         }
     }
 }

@@ -3,7 +3,7 @@ package com.nerdsyntax.juntalucas.core.navigation
 import com.nerdsyntax.juntalucas.core.session.BusinessSetupStatus
 import com.nerdsyntax.juntalucas.core.session.SessionUiState
 
-internal val onboardingRoutes = setOf(Routes.BUSINESS_INFO, Routes.ACTIVITY_SELECTION, Routes.STARTING_POINT)
+internal val onboardingRoutes = setOf(Routes.BUSINESS_INFO, Routes.ACTIVITY_SELECTION, Routes.STARTING_POINT, "plan_selection")
 internal val publicRoutes = setOf(Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, Routes.SPLASH, Routes.WELCOME)
 
 internal fun sessionDestination(session: SessionUiState, currentRoute: String?): String? = when {

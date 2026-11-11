@@ -2,9 +2,10 @@ package com.nerdsyntax.juntalucas.feature.onboarding.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -16,35 +17,61 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private val DarkBlue = Color(0xFF0F2A4A)
+private val LightBg = Color(0xFFF8FAFC)
+private val BorderLight = Color(0xFFE2E8F0)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StartingPointScreen(
     state: OnboardingUiState,
     onPuntoPartidaChange: (String) -> Unit,
     onNavigateBack: () -> Unit,
-    onFinishSetup: () -> Unit
+    onContinueClick: () -> Unit
 ) {
-    val darkBlue = Color(0xFF0F2A4A)
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("¿Cómo deseas comenzar?", color = Color.White, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = darkBlue)
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBg)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = DarkBlue,
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+                .padding(top = 48.dp, bottom = 22.dp, start = 8.dp, end = 20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onNavigateBack, enabled = !state.isLoading) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                }
+                Column {
+                    Text(
+                        text = "PASO 3 DE 4",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "¿Cómo deseas comenzar?",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
-    ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 18.dp, vertical = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SelectableCard(
                 title = "Registrar manualmente",
@@ -65,16 +92,20 @@ fun StartingPointScreen(
                 onClick = { if (!state.isLoading) onPuntoPartidaChange("ejemplo") }
             )
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFAFA))
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                border = BorderStroke(0.5.dp, BorderLight),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Resumen de configuración", fontWeight = FontWeight.Bold, color = Color.DarkGray, modifier = Modifier.padding(bottom = 8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Negocio", color = Color.Gray); Text(state.nombreNegocio.ifEmpty { "Sin nombre" }) }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Rubro", color = Color.Gray); Text(state.rubro.ifEmpty { "Sin rubro" }) }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Actividad", color = Color.Gray); Text(state.tipoActividad) }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Meta mensual", color = Color.Gray); Text(state.metaMensual.ifEmpty { "$0" }) }
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Resumen de configuración", fontWeight = FontWeight.Bold, color = DarkBlue, fontSize = 14.sp)
+                    HorizontalDivider(color = BorderLight)
+                    ResumenRow("Negocio", state.nombreNegocio.ifEmpty { "Sin nombre" })
+                    ResumenRow("Rubro", state.rubro.ifEmpty { "Sin rubro" })
+                    ResumenRow("Actividad", state.tipoActividad.replaceFirstChar { it.uppercase() })
+                    ResumenRow("Meta", state.metaMensual.ifEmpty { "$0" })
                 }
             }
 
@@ -82,16 +113,38 @@ fun StartingPointScreen(
 
             state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-            Button(
-                onClick = onFinishSetup,
+            Surface(
+                onClick = onContinueClick,
+                shape = RoundedCornerShape(18.dp),
+                color = DarkBlue,
+                shadowElevation = 4.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
-                enabled = !state.isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = darkBlue)
+                    .height(56.dp)
             ) {
-                Text(if (state.isLoading) "Guardando..." else "Finalizar configuración", fontSize = 16.sp)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Elegir mi plan",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ResumenRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = Color(0xFF64748B), fontSize = 13.sp)
+        Text(text = value, color = Color(0xFF0F2A4A), fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }

@@ -89,7 +89,7 @@ class AppViewModelFactory(
             )
 
         modelClass.isAssignableFrom(OnboardingViewModel::class.java) ->
-            OnboardingViewModel(businessRepository)
+            OnboardingViewModel(authRepository, businessRepository) // <-- AQUÍ ESTÁ EL CAMBIO
 
         else -> throw IllegalArgumentException("ViewModel desconocido: ${modelClass.name}")
     } as T

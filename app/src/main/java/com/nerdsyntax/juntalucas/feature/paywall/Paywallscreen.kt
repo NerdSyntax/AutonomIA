@@ -44,6 +44,7 @@ data class PlanUiModel(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaywallScreen(
+    currentPlan: String = "FREE",
     onClose: () -> Unit,
     onSelectPlan: (String) -> Unit
 ) {
@@ -54,7 +55,7 @@ fun PaywallScreen(
             description = "Obtén ayuda esencial para ordenar tus finanzas básicas.",
             price = "CLP 0",
             period = "por mes",
-            isCurrent = true,
+            isCurrent = currentPlan.uppercase() == "FREE",
             features = listOf(
                 "Catálogo de hasta 50 productos",
                 "100 registros de ventas/gastos al mes",
@@ -70,6 +71,7 @@ fun PaywallScreen(
             price = "CLP 4.990",
             period = "por mes",
             isPopular = true,
+            isCurrent = currentPlan.uppercase() == "PLUS",
             features = listOf(
                 "Todo lo del plan Gratis, además de:",
                 "Catálogo de hasta 500 productos",
@@ -85,6 +87,7 @@ fun PaywallScreen(
             description = "El CFO definitivo en tu bolsillo. Sin límites, máximo control.",
             price = "CLP 12.990",
             period = "por mes",
+            isCurrent = currentPlan.uppercase() == "PRO",
             features = listOf(
                 "Todo lo del plan Plus, además de:",
                 "Catálogo y movimientos ilimitados",

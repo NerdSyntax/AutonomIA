@@ -45,6 +45,9 @@ import com.nerdsyntax.juntalucas.feature.business.ui.*
 import com.nerdsyntax.juntalucas.feature.business.ui.product.*
 import com.nerdsyntax.juntalucas.feature.ai.ui.*
 import com.nerdsyntax.juntalucas.feature.profile.ui.*
+import com.nerdsyntax.juntalucas.feature.paywall.ui.PaywallScreen
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 
 private const val EDIT_SALE_PATH = "edit_sale"
 private const val EDIT_SALE_ID = "saleId"
@@ -199,7 +202,6 @@ fun AppNavigation() {
                     onLogout = vm::logout
                 )
             }
-
             composable(Routes.BUSINESS_INFO) {
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
                 val vm: OnboardingViewModel = viewModel(factory = factory)
@@ -228,11 +230,11 @@ fun AppNavigation() {
                     state = state,
                     onTipoActividadChange = vm::onTipoActividadChange,
                     onNavigateBack = { navController.popBackStack() },
-                    onContinueClick = { navController.navigate(Routes.STARTING_POINT) }
+                    onContinueClick = { navController.navigate("plan_selection") }
                 )
             }
 
-            composable(Routes.STARTING_POINT) { navBackStackEntry ->
+            composable("plan_selection") { navBackStackEntry ->
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
                 val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.BUSINESS_INFO) }
                 val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
@@ -243,14 +245,27 @@ fun AppNavigation() {
                         sessionViewModel.refreshBusiness()
                     }
                 }
-                StartingPointScreen(
-                    state = state,
-                    onPuntoPartidaChange = vm::onPuntoPartidaChange,
-                    onNavigateBack = { navController.popBackStack() },
-                    onFinishSetup = vm::finalizarConfiguracion
-                )
-            }
 
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PaywallScreen(
+                        currentPlan = state.planSuscripcion,
+                        onClose = { navController.popBackStack() },
+                        onSelectPlan = { planId ->
+                            vm.finalizarConfiguracion(planId)
+                        }
+                    )
+                    if (state.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
+                    }
+                }
+            }
             composable(Routes.DASHBOARD) { entry ->
                 if (!session.canAccessDashboard) return@composable
                 val vm: DashboardViewModel = viewModel(factory = factory)
