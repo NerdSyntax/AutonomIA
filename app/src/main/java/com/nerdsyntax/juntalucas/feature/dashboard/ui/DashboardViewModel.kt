@@ -3,7 +3,8 @@ package com.nerdsyntax.juntalucas.feature.dashboard.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.MetadataChanges
+import com.nerdsyntax.juntalucas.core.data.DataValidationException
 import com.nerdsyntax.juntalucas.core.data.salesUserMessage
 import com.nerdsyntax.juntalucas.core.format.formatClp
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
@@ -18,7 +19,9 @@ import com.nerdsyntax.juntalucas.feature.movements.domain.Sale
 import com.nerdsyntax.juntalucas.feature.movements.domain.SaleDates
 import com.nerdsyntax.juntalucas.feature.movements.domain.SalesRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -28,11 +31,19 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
+data class DashboardPurchaseState(
+    val planId: String? = null,
+    val isSaving: Boolean = false,
+    val isSuccess: Boolean = false,
+    val errorMessage: String? = null
+)
+
 class DashboardViewModel(
     private val authRepository: AuthRepository,
     private val businessRepository: BusinessRepository,
     private val salesRepository: SalesRepository? = null,
-    private val expensesRepository: ExpensesRepository? = null
+    private val expensesRepository: ExpensesRepository? = null,
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) : ViewModel() {
 
     private val locale = Locale.forLanguageTag("es-CL")
@@ -42,7 +53,18 @@ class DashboardViewModel(
     )
 
     private val retry = MutableStateFlow(0)
-    private var planSimuladoTemporal: String? = null
+    private val supportedPlans = setOf("FREE", "PLUS", "PRO")
+    private var purchaseJob: Job? = null
+    private var subscriptionErrorMessage: String? = null
+
+    @Volatile
+    private var ownerUid: String? = null
+
+    @Volatile
+    private var sessionVersion: Long = 0L
+
+    private val _purchaseState = MutableStateFlow(DashboardPurchaseState())
+    val purchaseState = _purchaseState.asStateFlow()
 
     private val _uiState = MutableStateFlow(
         DashboardUiState(isLoading = true)
@@ -55,6 +77,13 @@ class DashboardViewModel(
                 .map { it?.uid }
                 .distinctUntilChanged()
                 .collectLatest { uid ->
+                    sessionVersion += 1
+                    ownerUid = uid
+                    purchaseJob?.cancel()
+                    purchaseJob = null
+                    _purchaseState.value = DashboardPurchaseState()
+                    subscriptionErrorMessage = null
+
                     val initialSelection = currentMonthSelection()
                     periodSelection.value = initialSelection
 
@@ -76,23 +105,32 @@ class DashboardViewModel(
                         }
                         return@collectLatest
                     }
-                    launch {
-                        observeUserName(uid).collect { name ->
-                            _uiState.update { it.copy(userName = name) }
+                    val version = sessionVersion
+                    // Estos observadores pertenecen a esta sesión. Al cambiar
+                    // de usuario, collectLatest cancela el scope y sus listeners.
+                    coroutineScope {
+                        launch {
+                            observeUserName(uid).collect { name ->
+                                if (isCurrentSession(uid, version)) {
+                                    _uiState.update { it.copy(userName = name) }
+                                }
+                            }
                         }
-                    }
-                    launch {
-                        observeSubscriptionPlan(uid).collect { plan ->
-                            _uiState.update { it.copy(planActual = plan) }
+                        launch {
+                            retry.collectLatest {
+                                observeSubscriptionPlan(uid)
+                                    .catch { error -> emit(Result.failure(error)) }
+                                    .collect { result ->
+                                        if (isCurrentSession(uid, version)) {
+                                            applySubscriptionResult(result)
+                                        }
+                                    }
+                            }
                         }
-                    }
-                    combine(
-                        periodSelection,
-                        retry
-                    ) { selection, _ ->
-                        selection
-                    }.collectLatest { selection ->
-                        loadPeriod(uid, selection)
+                        combine(periodSelection, retry) { selection, _ -> selection }
+                            .collectLatest { selection ->
+                                loadPeriod(uid, selection)
+                            }
                     }
                 }
         }
@@ -105,10 +143,11 @@ class DashboardViewModel(
 
         trySend(initialName)
 
-        val listener = FirebaseFirestore.getInstance()
+        val listener = firestore
             .collection("users")
             .document(uid)
             .addSnapshotListener { snapshot, error ->
+                if (authRepository.currentUser.value?.uid != uid) return@addSnapshotListener
                 if (error != null) return@addSnapshotListener
                 if (snapshot != null && snapshot.exists()) {
                     val rawFirestore = listOf("name", "nombre", "firstName", "fullName", "displayName", "userName")
@@ -120,28 +159,79 @@ class DashboardViewModel(
         awaitClose { listener.remove() }
     }
 
-    private fun observeSubscriptionPlan(uid: String): Flow<String> = callbackFlow {
-        trySend("FREE")
-        val listener = FirebaseFirestore.getInstance()
+    private fun observeSubscriptionPlan(uid: String): Flow<Result<String>> = callbackFlow {
+        val listener = firestore
             .collection("users")
             .document(uid)
-            .collection("business")
-            .document("profile")
-            .addSnapshotListener { snapshot, error ->
-                if (planSimuladoTemporal != null) {
-                    trySend(planSimuladoTemporal!!)
+            .collection("billing")
+            .document("current")
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+                if (authRepository.currentUser.value?.uid != uid) {
                     return@addSnapshotListener
                 }
 
-                if (error != null) return@addSnapshotListener
-                if (snapshot != null && snapshot.exists()) {
-                    val susMap = snapshot.get("suscripcion") as? Map<*, *>
-                    val plan = susMap?.get("plan") as? String ?: "FREE"
-                    trySend(plan)
+                if (error != null) {
+                    trySend(Result.failure(error))
+                    return@addSnapshotListener
                 }
+
+                if (snapshot == null ||
+                    snapshot.metadata.isFromCache ||
+                    snapshot.metadata.hasPendingWrites()
+                ) {
+                    return@addSnapshotListener
+                }
+
+                trySend(runCatching {
+                    if (!snapshot.exists()) {
+                        "FREE"
+                    } else {
+                        val plan = snapshot.getString("plan")
+                            ?: throw DataValidationException("El plan guardado no es válido.")
+                        normalizePlan(plan)
+                    }
+                })
             }
+
         awaitClose { listener.remove() }
     }
+    private fun applySubscriptionResult(result: Result<String>) {
+        result.fold(
+            onSuccess = { plan ->
+                val previousError = subscriptionErrorMessage
+                subscriptionErrorMessage = null
+                _uiState.update {
+                    it.copy(
+                        planActual = plan,
+                        errorMessage = if (it.errorMessage == previousError) {
+                            _purchaseState.value.errorMessage
+                        } else {
+                            it.errorMessage
+                        }
+                    )
+                }
+            },
+            onFailure = { error ->
+                val message = "No se pudo consultar tu plan. ${error.salesUserMessage()}"
+                subscriptionErrorMessage = message
+                _uiState.update {
+                    it.copy(errorMessage = _purchaseState.value.errorMessage ?: message)
+                }
+            }
+        )
+    }
+
+    private fun normalizePlan(value: String): String {
+        val normalized = value.trim().uppercase(Locale.ROOT)
+        if (normalized !in supportedPlans) {
+            throw DataValidationException("Selecciona un plan válido: Gratis, Plus o Pro.")
+        }
+        return normalized
+    }
+
+    private fun isCurrentSession(uid: String, version: Long): Boolean =
+        ownerUid == uid && sessionVersion == version &&
+                authRepository.currentUser.value?.uid == uid
 
     private fun extraerPrimerNombre(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
@@ -238,20 +328,104 @@ class DashboardViewModel(
     fun ocultarPaywall() {
         _uiState.update { it.copy(mostrarPaywallSuscripcion = false, mensajePaywallPersonalizado = null) }
     }
-    fun simularCompra(planId: String) {
-        val uid = authRepository.currentUser.value?.uid ?: return
-        planSimuladoTemporal = planId
-        _uiState.update { it.copy(planActual = planId) }
-        ocultarPaywall()
 
-        viewModelScope.launch {
+    fun clearPurchaseResult() {
+        if (_purchaseState.value.isSaving) return
+        val previousError = _purchaseState.value.errorMessage
+        _purchaseState.value = DashboardPurchaseState()
+        _uiState.update {
+            it.copy(
+                errorMessage = if (previousError != null && it.errorMessage == previousError) {
+                    subscriptionErrorMessage
+                } else {
+                    it.errorMessage
+                }
+            )
+        }
+    }
+
+    fun simularCompra(planId: String) {
+        if (_purchaseState.value.isSaving || purchaseJob?.isActive == true) return
+
+        val uid = authRepository.currentUser.value?.uid
+        if (uid == null || uid != ownerUid) {
+            val message = "Tu sesión cambió. Vuelve a iniciar sesión antes de cambiar el plan."
+            _purchaseState.value = DashboardPurchaseState(errorMessage = message)
+            _uiState.update { it.copy(errorMessage = message) }
+            return
+        }
+
+        val selectedPlan = try {
+            normalizePlan(planId)
+        } catch (error: DataValidationException) {
+            val message = error.salesUserMessage()
+            _purchaseState.value = DashboardPurchaseState(errorMessage = message)
+            _uiState.update { it.copy(errorMessage = message) }
+            return
+        }
+
+        val version = sessionVersion
+        _purchaseState.value = DashboardPurchaseState(planId = selectedPlan, isSaving = true)
+        _uiState.update { it.copy(errorMessage = subscriptionErrorMessage) }
+
+        purchaseJob = viewModelScope.launch {
             try {
-                val db = FirebaseFirestore.getInstance()
-                val profileRef = db.collection("users").document(uid).collection("business").document("profile")
-                val data = mapOf("suscripcion" to mapOf("plan" to planId))
-                profileRef.set(data, SetOptions.merge()).await()
-            } catch (e: Exception) {
-                android.util.Log.e("DashboardVM", "Escritura bloqueada por reglas de Firebase: ${e.message}")
+                val profileRef = firestore.collection("users").document(uid)
+                    .collection("business").document("profile")
+
+                // Una transacción requiere conexión. No dejamos una compra
+                // pendiente en la caché para que parezca aplicada sin confirmación.
+                firestore.runTransaction { transaction ->
+                    if (!isCurrentSession(uid, version)) {
+                        throw DataValidationException("Tu sesión cambió durante la compra de prueba.")
+                    }
+
+                    val profile = transaction.get(profileRef)
+                    if (!profile.exists()) {
+                        throw DataValidationException(
+                            "Completa la información de tu negocio antes de cambiar el plan."
+                        )
+                    }
+
+                    if (!isCurrentSession(uid, version)) {
+                        throw DataValidationException("Tu sesión cambió durante la compra de prueba.")
+                    }
+
+                    // Conservamos los demás campos del negocio y de la suscripción.
+                    transaction.update(profileRef, mapOf(
+                        "suscripcion.plan" to selectedPlan,
+                        "suscripcion.esSimulada" to true
+                    ))
+                    Unit
+                }.await()
+
+                if (!isCurrentSession(uid, version)) return@launch
+
+                subscriptionErrorMessage = null
+                _uiState.update {
+                    it.copy(
+                        planActual = selectedPlan,
+                        mostrarPaywallSuscripcion = false,
+                        mensajePaywallPersonalizado = null,
+                        errorMessage = subscriptionErrorMessage
+                    )
+                }
+                _purchaseState.value = DashboardPurchaseState(
+                    planId = selectedPlan,
+                    isSuccess = true
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (!isCurrentSession(uid, version)) return@launch
+
+                val message = "No se pudo guardar el plan. ${error.salesUserMessage()}"
+                _purchaseState.value = DashboardPurchaseState(
+                    planId = selectedPlan,
+                    errorMessage = message
+                )
+                _uiState.update { it.copy(errorMessage = message) }
+                android.util.Log.e("DashboardVM", "Error al guardar el plan de demostración.", error)
             }
         }
     }
@@ -449,7 +623,7 @@ class DashboardViewModel(
                 mesesGrafico = emptyList(),
                 distribucionGastos = emptyList(),
                 ventasPorProducto = emptyList(),
-                errorMessage = null,
+                errorMessage = _purchaseState.value.errorMessage ?: subscriptionErrorMessage,
                 errorGraficos = null,
                 isLoading = true,
                 graficosCargando = true,
@@ -716,7 +890,7 @@ class DashboardViewModel(
                 customStart = selection.start,
                 customEnd = selection.end,
                 isLoading = false,
-                errorMessage = additionalError,
+                errorMessage = _purchaseState.value.errorMessage ?: subscriptionErrorMessage ?: additionalError,
                 fromCache = fromCache,
                 mesesGrafico = chartData,
                 graficosCargando = false,

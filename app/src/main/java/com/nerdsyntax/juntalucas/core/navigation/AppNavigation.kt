@@ -248,11 +248,11 @@ fun AppNavigation() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     PaywallScreen(
-                        currentPlan = state.planSuscripcion,
-                        onClose = { navController.popBackStack() },
-                        onSelectPlan = { planId ->
-                            vm.finalizarConfiguracion(planId)
-                        }
+                        onClose = { if (!state.isLoading) navController.popBackStack() },
+                        onSelectPlan = {},
+                        onContinueFree = { vm.finalizarConfiguracion("FREE") },
+                        isContinuing = state.isLoading,
+                        onboardingError = state.errorMessage
                     )
                     if (state.isLoading) {
                         Box(
