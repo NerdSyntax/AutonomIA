@@ -246,7 +246,26 @@ fun ProfileScreen(
         )
 
         Spacer(modifier = Modifier.height(32.dp))
+        OutlinedButton(
+            onClick = { vm.eliminarDatosDePrueba() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEA580C))
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.DeleteSweep,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text("Limpiar datos de prueba", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
 
+        Spacer(modifier = Modifier.height(16.dp))
         OutlinedButton(
             onClick = { vm.logout() },
             modifier = Modifier
@@ -269,7 +288,6 @@ fun ProfileScreen(
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
-
 
 @Composable
 private fun EditUserDialog(
