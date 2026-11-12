@@ -63,6 +63,7 @@ fun DashboardScreen(
     onViewAll: () -> Unit = {},
     onQuickAddSale: () -> Unit = {},
     onExportCsv: (Context) -> Unit = {},
+    onGenerarDatosPrueba: () -> Unit = {},
     notifications: @Composable () -> Unit = {},
     viewModel: DashboardViewModel = viewModel()
 ) {
@@ -103,7 +104,9 @@ fun DashboardScreen(
 
     if (state.isLoading) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(LightBg),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(color = DarkBlue)
@@ -173,7 +176,8 @@ fun DashboardScreen(
 
                 RecentMovementsSection(
                     movimientos = state.movimientosRecientes,
-                    onViewAll = onViewAll
+                    onViewAll = onViewAll,
+                    onGenerarDatosPrueba = { viewModel.cargarDatosDePrueba() }
                 )
 
                 Button(
@@ -764,41 +768,90 @@ private fun AiAccessSection(
 }
 
 @Composable
-private fun RecentMovementsSection(movimientos: List<MovimientoUi>, onViewAll: () -> Unit) {
+private fun RecentMovementsSection(
+    movimientos: List<MovimientoUi>,
+    onViewAll: () -> Unit,
+    onGenerarDatosPrueba: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("Movimientos recientes", fontWeight = FontWeight.Bold, color = DarkBlue, fontSize = 16.sp)
-                Text("Ver todos", color = DarkBlue, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onViewAll))
+                if (movimientos.isNotEmpty()) {
+                    Text("Ver todos", color = DarkBlue, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onViewAll))
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
 
             if (movimientos.isEmpty()) {
-                Text("Aún no tienes movimientos registrados.", color = Color.Gray, fontSize = 14.sp)
-            }
-            movimientos.forEach { mov ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val iconColor = if (mov.esIngreso) GreenPos else RedNeg
-                    val bgColor = if (mov.esIngreso) Color(0xFFD1FAE5) else Color(0xFFFEE2E2)
-
-                    Box(modifier = Modifier.size(40.dp).background(bgColor, CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(if (mov.esIngreso) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null, tint = iconColor)
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = PurpleAi,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Text(
+                        text = "Tu negocio aún no tiene movimientos.",
+                        color = Color.Gray,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Registra una venta o genera datos de prueba para explorar los gráficos y métricas de la aplicación.",
+                        color = Color.Gray.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onGenerarDatosPrueba,
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Generar datos de prueba", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(mov.titulo, fontWeight = FontWeight.SemiBold, color = DarkBlue, fontSize = 14.sp)
-                        Text(mov.fecha, color = Color.Gray, fontSize = 12.sp)
-                    }
-                    Text(mov.montoStr, fontWeight = FontWeight.Bold, color = iconColor)
                 }
-                if (mov != movimientos.last()) HorizontalDivider(color = Color(0xFFF1F5F9))
+            } else {
+                movimientos.forEach { mov ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val iconColor = if (mov.esIngreso) GreenPos else RedNeg
+                        val bgColor = if (mov.esIngreso) Color(0xFFD1FAE5) else Color(0xFFFEE2E2)
+
+                        Box(modifier = Modifier.size(40.dp).background(bgColor, CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(if (mov.esIngreso) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null, tint = iconColor)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(mov.titulo, fontWeight = FontWeight.SemiBold, color = DarkBlue, fontSize = 14.sp)
+                            Text(mov.fecha, color = Color.Gray, fontSize = 12.sp)
+                        }
+                        Text(mov.montoStr, fontWeight = FontWeight.Bold, color = iconColor)
+                    }
+                    if (mov != movimientos.last()) HorizontalDivider(color = Color(0xFFF1F5F9))
+                }
             }
         }
     }

@@ -282,12 +282,8 @@ fun AppNavigation() {
 
                 DashboardScreen(
                     state = state,
-                    onNavigateToAi = {
-                        navController.navigateToBottomRoute(Routes.AI)
-                    },
-                    onNavigateToMonthlyAnalysis = {
-                        navController.navigateToBottomRoute(Routes.AI)
-                    },
+                    onNavigateToAi = { navController.navigateToBottomRoute(Routes.AI) },
+                    onNavigateToMonthlyAnalysis = { navController.navigateToBottomRoute(Routes.AI) },
                     onPeriodApplied = vm::applyPeriod,
                     onFilterSelected = vm::selectFilter,
                     onCustomStart = vm::onCustomStart,
@@ -296,6 +292,7 @@ fun AppNavigation() {
                     onViewAll = { navController.navigateToBottomRoute(Routes.MOVEMENTS) },
                     onQuickAddSale = { navController.navigate(Routes.ADD_SALE) },
                     onExportCsv = { context -> vm.exportarDatosCsv(context) },
+                    onGenerarDatosPrueba = { vm.cargarDatosDePrueba() },
                     notifications = {
                         StockAlertsButton(
                             alerts = alertsState.stockAlerts,

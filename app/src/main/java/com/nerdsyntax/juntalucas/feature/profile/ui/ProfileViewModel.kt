@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
+import com.google.firebase.firestore.FirebaseFirestore
 
 class ProfileViewModel(
     private val authRepository: AuthRepository,
@@ -348,6 +349,40 @@ class ProfileViewModel(
         authRepository.logout()
     }
 
+    fun eliminarDatosDePrueba() {
+        val uid = authRepository.currentUser.value?.uid ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(statusMessage = "Borrando datos de prueba...", isSaving = true) }
+
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val batch = db.batch()
+                val ventasPrueba = db.collection("users").document(uid).collection("sales")
+                    .whereEqualTo("isSample", true).get().await()
+                ventasPrueba.documents.forEach { batch.delete(it.reference) }
+                val gastosPrueba = db.collection("users").document(uid).collection("expenses")
+                    .whereEqualTo("isSample", true).get().await()
+                gastosPrueba.documents.forEach { batch.delete(it.reference) }
+                batch.commit().await()
+
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        statusMessage = "Datos de prueba eliminados correctamente."
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al eliminar datos de prueba", e)
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        statusMessage = "Error al borrar los datos de prueba."
+                    )
+                }
+            }
+        }
+    }
     private companion object {
         const val TAG = "ProfileVM"
         const val MONEDA = "Peso chileno (CLP)"

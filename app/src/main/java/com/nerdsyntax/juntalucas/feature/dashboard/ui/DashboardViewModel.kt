@@ -902,6 +902,26 @@ class DashboardViewModel(
         }
     }
 
+    fun cargarDatosDePrueba() {
+        val uid = authRepository.currentUser.value?.uid ?: return
+        val fechaDestino = periodSelection.value.start
+
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                com.nerdsyntax.juntalucas.feature.onboarding.data.OnboardingSampleData.generarDatosDePrueba(uid, fechaDestino)
+            } catch (e: Exception) {
+                android.util.Log.e("DashboardVM", "Error Firebase", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Error de Firebase: ${e.localizedMessage}"
+                    )
+                }
+            }
+        }
+    }
+
     private fun buildChartData(
         selection: PeriodSelection,
         range: DashboardDateRange,
