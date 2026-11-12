@@ -1,5 +1,10 @@
 package com.nerdsyntax.juntalucas.feature.paywall.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -12,23 +17,32 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import java.util.Locale
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val LightBg = Color(0xFFF8FAFC)
-private val GreenPos = Color(0xFF10B981)
 private val GradientPurpleStart = Color(0xFF6366F1)
 private val GradientPurpleEnd = Color(0xFF9333EA)
-private val PurpleBrush = Brush.horizontalGradient(listOf(GradientPurpleStart, GradientPurpleEnd))
+private val PurpleBrush = Brush.horizontalGradient(
+    listOf(GradientPurpleStart, GradientPurpleEnd)
+)
 
 data class PlanUiModel(
     val id: String,
@@ -38,16 +52,45 @@ data class PlanUiModel(
     val period: String,
     val isPopular: Boolean = false,
     val isCurrent: Boolean = false,
-    val features: List<String>
+    val features: List<String>,
+    val amountClp: Long = 0L
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun PaywallScreen(
-    currentPlan: String = "FREE",
     onClose: () -> Unit,
-    onSelectPlan: (String) -> Unit
+    onSelectPlan: (String) -> Unit,
+    currentPlanId: String? = null,
+    onContinueFree: (() -> Unit)? = null,
+    isContinuing: Boolean = false,
+    onboardingError: String? = null
 ) {
+    val context = LocalContext.current
+    val isOnboarding = onContinueFree != null
+    val canOpenTestCheckout = !isOnboarding &&
+            (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var creatingCheckout by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = isOnboarding && isContinuing) {
+        // Espera a que termine el guardado del registro.
+    }
+
+    LaunchedEffect(isOnboarding, onboardingError) {
+        if (isOnboarding && !onboardingError.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(onboardingError)
+        }
+    }
+
+    val normalizedCurrentPlan = currentPlanId
+        ?.trim()
+        ?.uppercase(Locale.ROOT)
+        .takeUnless { isOnboarding }
+    val alreadyPaid = normalizedCurrentPlan == "PLUS" || normalizedCurrentPlan == "PRO"
+
     val planes = listOf(
         PlanUiModel(
             id = "FREE",
@@ -55,7 +98,7 @@ fun PaywallScreen(
             description = "Obtén ayuda esencial para ordenar tus finanzas básicas.",
             price = "CLP 0",
             period = "por mes",
-            isCurrent = currentPlan.uppercase() == "FREE",
+            isCurrent = normalizedCurrentPlan == "FREE",
             features = listOf(
                 "Catálogo de hasta 50 productos",
                 "100 registros de ventas/gastos al mes",
@@ -71,7 +114,8 @@ fun PaywallScreen(
             price = "CLP 4.990",
             period = "por mes",
             isPopular = true,
-            isCurrent = currentPlan.uppercase() == "PLUS",
+            isCurrent = normalizedCurrentPlan == "PLUS",
+            amountClp = 4_990L,
             features = listOf(
                 "Todo lo del plan Gratis, además de:",
                 "Catálogo de hasta 500 productos",
@@ -87,7 +131,8 @@ fun PaywallScreen(
             description = "El CFO definitivo en tu bolsillo. Sin límites, máximo control.",
             price = "CLP 12.990",
             period = "por mes",
-            isCurrent = currentPlan.uppercase() == "PRO",
+            isCurrent = normalizedCurrentPlan == "PRO",
+            amountClp = 12_990L,
             features = listOf(
                 "Todo lo del plan Plus, además de:",
                 "Catálogo y movimientos ilimitados",
@@ -100,18 +145,16 @@ fun PaywallScreen(
     )
 
     Scaffold(
-        containerColor = LightBg
+        containerColor = LightBg,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                         .background(
                             color = DarkBlue,
                             shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
@@ -125,30 +168,33 @@ fun PaywallScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Elige tu plan",
+                                "Suscripciones",
                                 color = Color.White,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "Potencia tu negocio con Inteligencia Artificial",
+                                text = if (isOnboarding) {
+                                    "Empieza gratis y revisa los planes de pago desde tu perfil"
+                                } else {
+                                    "Elige el plan que mejor se adapte a tu negocio"
+                                },
                                 color = Color.White.copy(alpha = 0.75f),
                                 fontSize = 13.sp,
                                 lineHeight = 18.sp
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
-
+                        Spacer(Modifier.width(12.dp))
                         IconButton(
                             onClick = onClose,
-                            modifier = Modifier
-                                .size(40.dp)
+                            enabled = !isContinuing,
+                            modifier = Modifier.size(40.dp)
                                 .background(Color.White.copy(alpha = 0.12f), CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
+                                Icons.Default.Close,
                                 contentDescription = "Cerrar",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
@@ -157,44 +203,135 @@ fun PaywallScreen(
                     }
                 }
             }
-            items(planes) { plan ->
+
+            items(planes, key = { it.id }) { plan ->
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    PlanCard(plan = plan, onSelect = { onSelectPlan(plan.id) })
+                    PlanCard(
+                        plan = plan,
+                        actionEnabled = if (isOnboarding) {
+                            plan.id == "FREE" && !isContinuing
+                        } else {
+                            canOpenTestCheckout && !alreadyPaid && !creatingCheckout &&
+                                    (plan.id == "PLUS" || plan.id == "PRO")
+                        },
+                        actionLabel = if (isOnboarding) "Empezar gratis" else "Continuar al pago",
+                        showFreeAction = isOnboarding,
+                        unavailableLabel = when {
+                            !isOnboarding && creatingCheckout -> "Preparando enlace…"
+                            !isOnboarding && alreadyPaid -> "Ya tienes un plan de pago"
+                            !isOnboarding -> "No disponible por ahora"
+                            plan.id == "FREE" -> "Guardando…"
+                            else -> "Disponible desde Perfil"
+                        },
+                        onSelect = openCheckout@{
+                            if (onContinueFree != null) {
+                                if (plan.id == "FREE" && !isContinuing) onContinueFree()
+                                return@openCheckout
+                            }
+
+                            if (!canOpenTestCheckout || creatingCheckout || alreadyPaid) {
+                                return@openCheckout
+                            }
+
+                            creatingCheckout = true
+                            scope.launch {
+                                val auth = FirebaseAuth.getInstance()
+                                val uid = auth.currentUser?.uid
+                                try {
+                                    check(uid != null) {
+                                        "Inicia sesión para continuar al pago."
+                                    }
+
+                                    val result = FirebaseFunctions.getInstance("us-central1")
+                                        .getHttpsCallable("createSandboxCheckout")
+                                        .call(mapOf("plan" to plan.id))
+                                        .await()
+
+                                    if (auth.currentUser?.uid != uid) return@launch
+
+                                    val data = result.data as? Map<*, *>
+                                    val url = data?.get("checkoutUrl") as? String
+                                        ?: error("No se recibió el enlace de pago.")
+                                    val uri = Uri.parse(url)
+
+                                    check(
+                                        uri.scheme == "https" &&
+                                                (uri.host == "www.mercadopago.cl" ||
+                                                        uri.host == "www.mercadopago.com") &&
+                                                uri.path == "/subscriptions/checkout"
+                                    ) {
+                                        "El enlace de pago no es válido."
+                                    }
+
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, uri)
+                                            .addCategory(Intent.CATEGORY_BROWSABLE)
+                                    )
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (_: ActivityNotFoundException) {
+                                    snackbarHostState.showSnackbar(
+                                        "No hay un navegador disponible."
+                                    )
+                                } catch (e: FirebaseFunctionsException) {
+                                    if (auth.currentUser?.uid == uid) {
+                                        val message = if (
+                                            e.code == FirebaseFunctionsException.Code.FAILED_PRECONDITION
+                                        ) {
+                                            e.message ?: "No se pudo iniciar la compra."
+                                        } else {
+                                            "No pudimos preparar el pago. Intenta de nuevo en un momento."
+                                        }
+                                        snackbarHostState.showSnackbar(message)
+                                    }
+                                } catch (e: IllegalStateException) {
+                                    snackbarHostState.showSnackbar(
+                                        e.message ?: "No se pudo iniciar la compra."
+                                    )
+                                } catch (_: Exception) {
+                                    snackbarHostState.showSnackbar("No se pudo abrir Mercado Pago.")
+                                } finally {
+                                    creatingCheckout = false
+                                }
+                            }
+                        }
+                    )
                 }
             }
 
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-            }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }
 
-private fun Color.opacityCompat(alpha: Float): Color = this.copy(alpha = alpha)
-
 @Composable
-private fun PlanCard(plan: PlanUiModel, onSelect: () -> Unit) {
-    val isHighlighted = plan.isPopular
-    val cardModifier = if (isHighlighted) {
-        Modifier
-            .fillMaxWidth()
-            .border(2.dp, PurpleBrush, RoundedCornerShape(16.dp))
-    } else {
-        Modifier.fillMaxWidth()
-    }
+private fun PlanCard(
+    plan: PlanUiModel,
+    actionEnabled: Boolean,
+    actionLabel: String,
+    showFreeAction: Boolean,
+    unavailableLabel: String,
+    onSelect: () -> Unit
+) {
+    val shape = RoundedCornerShape(16.dp)
+    val buttonShape = RoundedCornerShape(12.dp)
+    val highlighted = plan.isPopular
+    val cardModifier = Modifier.fillMaxWidth().then(
+        if (highlighted) Modifier.border(2.dp, PurpleBrush, shape) else Modifier
+    )
 
     Card(
         modifier = cardModifier,
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isHighlighted) 8.dp else 2.dp)
+        shape = shape,
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (highlighted) 8.dp else 2.dp
+        )
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            if (isHighlighted) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            if (highlighted) {
                 Text(
-                    text = "MÁS POPULAR",
+                    "MÁS POPULAR",
                     color = GradientPurpleStart,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -202,102 +339,90 @@ private fun PlanCard(plan: PlanUiModel, onSelect: () -> Unit) {
                 )
             }
 
-            Text(
-                text = plan.name,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = DarkBlue
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = plan.description,
-                fontSize = 14.sp,
-                color = Color.Gray,
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Text(plan.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = DarkBlue)
+            Spacer(Modifier.height(4.dp))
+            Text(plan.description, fontSize = 14.sp, color = Color.Gray, lineHeight = 18.sp)
+            Spacer(Modifier.height(16.dp))
 
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = plan.price,
+                    plan.price,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = DarkBlue
                 )
                 Text(
-                    text = " ${plan.period}",
+                    " ${plan.period}",
                     fontSize = 14.sp,
                     color = Color.Gray,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
-            if (plan.isCurrent) {
+            val disabledLabel = when {
+                plan.isCurrent -> "Plan actual"
+                plan.amountClp == 0L && !showFreeAction -> "Plan sin costo"
+                !actionEnabled -> unavailableLabel
+                else -> null
+            }
+
+            if (disabledLabel != null) {
                 OutlinedButton(
-                    onClick = { /* Ya es el plan actual */ },
-                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {},
                     enabled = false,
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = buttonShape
                 ) {
-                    Text("Plan actual")
+                    Text(disabledLabel)
                 }
             } else {
                 Button(
                     onClick = onSelect,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = if (isHighlighted) {
-                        ButtonDefaults.buttonColors(containerColor = Color.Transparent)
-                    } else {
-                        ButtonDefaults.buttonColors(containerColor = DarkBlue)
-                    }
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = buttonShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (highlighted) Color.Transparent else DarkBlue
+                    )
                 ) {
                     Box(
-                        modifier = if (isHighlighted) {
-                            Modifier
-                                .fillMaxSize()
-                                .background(PurpleBrush, RoundedCornerShape(12.dp))
-                        } else {
-                            Modifier.fillMaxSize()
-                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .then(
+                                if (highlighted) Modifier.background(PurpleBrush, buttonShape)
+                                else Modifier
+                            )
+                            .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Comenzar", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(
+                            actionLabel,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
             HorizontalDivider(color = Color(0xFFE2E8F0))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
             plan.features.forEach { feature ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        Icons.Default.Check,
                         contentDescription = null,
-                        tint = if (isHighlighted) GradientPurpleStart else DarkBlue,
+                        tint = if (highlighted) GradientPurpleStart else DarkBlue,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = feature,
-                        fontSize = 14.sp,
-                        color = Color(0xFF334155),
-                        lineHeight = 18.sp
-                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(feature, fontSize = 14.sp, color = Color(0xFF334155), lineHeight = 18.sp)
                 }
             }
         }
@@ -322,51 +447,45 @@ fun LimitReachedDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(Color(0xFFFEF2F2), CircleShape),
+                    modifier = Modifier.size(64.dp).background(Color(0xFFFEF2F2), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.WarningAmber,
+                        Icons.Default.WarningAmber,
                         contentDescription = null,
                         tint = Color(0xFFEF4444),
                         modifier = Modifier.size(32.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
+                Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Límite alcanzado",
+                    "Límite alcanzado",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkBlue
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    text = customMessage ?: "Has utilizado toda la cuota de esta función incluida en tu plan Gratis. Tu cuota se reiniciará el $fechaReinicio.",
+                    customMessage
+                        ?: "Has utilizado toda la cuota de esta función incluida en tu plan Gratis. " +
+                        "Tu cuota se reiniciará el $fechaReinicio.",
                     fontSize = 15.sp,
                     color = Color.Gray,
                     textAlign = TextAlign.Center,
                     lineHeight = 20.sp
                 )
-
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
 
                 Button(
                     onClick = onUpgrade,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
+                        modifier = Modifier.fillMaxSize()
                             .background(PurpleBrush, RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -374,11 +493,8 @@ fun LimitReachedDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                TextButton(onClick = onDismiss) {
-                    Text("Cerrar", color = Color.Gray)
-                }
+                Spacer(Modifier.height(12.dp))
+                TextButton(onClick = onDismiss) { Text("Cerrar", color = Color.Gray) }
             }
         }
     }

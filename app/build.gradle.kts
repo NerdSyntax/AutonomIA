@@ -40,10 +40,11 @@ android {
 }
 
 dependencies {
+    implementation("com.google.firebase:firebase-functions")
     implementation("com.google.firebase:firebase-storage")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-
+    implementation("com.android.billingclient:billing:9.1.0")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
