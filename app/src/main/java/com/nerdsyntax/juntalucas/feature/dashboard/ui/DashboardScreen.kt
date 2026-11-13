@@ -22,9 +22,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nerdsyntax.juntalucas.feature.dashboard.domain.DashboardPeriodFilter
 import com.nerdsyntax.juntalucas.feature.dashboard.ui.components.BusinessPieChartCard
@@ -65,19 +68,20 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
     val context = LocalContext.current
-
     var mostrarPantallaPlanes by rememberSaveable { mutableStateOf(false) }
 
-    if (state.mostrarPaywallSuscripcion) {
+    val openPlans: () -> Unit = {
+        mostrarPantallaPlanes = true
+    }
+
+    if (state.mostrarPaywallSuscripcion && !mostrarPantallaPlanes) {
         LimitReachedDialog(
             fechaReinicio = "próximo ciclo mensual",
             customMessage = state.mensajePaywallPersonalizado,
-            onDismiss = {
-                viewModel.ocultarPaywall()
-            },
+            onDismiss = { viewModel.ocultarPaywall() },
             onUpgrade = {
                 viewModel.ocultarPaywall()
-                mostrarPantallaPlanes = true
+                openPlans()
             }
         )
     }
@@ -85,17 +89,15 @@ fun DashboardScreen(
     if (mostrarPantallaPlanes) {
         Dialog(
             onDismissRequest = { mostrarPantallaPlanes = false },
-            properties = androidx.compose.ui.window.DialogProperties(
+            properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false
             )
         ) {
             PaywallScreen(
                 onClose = { mostrarPantallaPlanes = false },
-                onSelectPlan = { planId ->
-                    viewModel.simularCompra(planId)
-                    mostrarPantallaPlanes = false
-                }
+                onSelectPlan = {},
+                currentPlanId = state.planActual
             )
         }
     }
@@ -124,7 +126,7 @@ fun DashboardScreen(
                 onFilterSelected = onFilterSelected,
                 onPeriodApplied = onPeriodApplied,
                 notifications = notifications,
-                onBadgeClick = { mostrarPantallaPlanes = true }
+                onBadgeClick = openPlans
             )
 
             Column(
@@ -226,6 +228,145 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun DashboardPurchaseDialog(
+    purchase: DashboardPurchaseState,
+    onDismiss: () -> Unit,
+    onSelectPlan: (String) -> Unit,
+    onRetry: () -> Unit,
+    onBackToPlans: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+            dismissOnBackPress = !purchase.isSaving,
+            dismissOnClickOutside = !purchase.isSaving
+        )
+    ) {
+        if (!purchase.isSaving && !purchase.isSuccess && purchase.errorMessage == null) {
+            // Se conserva la firma actual de PaywallScreen. Los cambios de su
+            // formulario se harán en el siguiente paso, dentro de ese archivo.
+            PaywallScreen(
+                onClose = onDismiss,
+                onSelectPlan = onSelectPlan
+            )
+        } else {
+            DashboardPurchaseStatus(
+                purchase = purchase,
+                onDismiss = onDismiss,
+                onRetry = onRetry,
+                onBackToPlans = onBackToPlans
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardPurchaseStatus(
+    purchase: DashboardPurchaseState,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+    onBackToPlans: () -> Unit
+) {
+    val planName = when (purchase.planId) {
+        "FREE" -> "AutonomIA Gratis"
+        "PLUS" -> "AutonomIA Plus"
+        "PRO" -> "AutonomIA Pro"
+        else -> "Tu plan"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBg)
+            .safeDrawingPadding()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (purchase.isSaving) {
+                        CircularProgressIndicator(color = PurpleAi)
+                    } else {
+                        Icon(
+                            imageVector = if (purchase.isSuccess) Icons.Default.Check else Icons.Default.WarningAmber,
+                            contentDescription = null,
+                            tint = if (purchase.isSuccess) GreenPos else RedNeg,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+
+                    Text(
+                        text = when {
+                            purchase.isSaving -> "Guardando el plan…"
+                            purchase.isSuccess -> "Plan guardado"
+                            else -> "No se pudo guardar el plan"
+                        },
+                        color = DarkBlue,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(planName, color = PurpleAi, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = when {
+                            purchase.isSaving -> "Estamos esperando la confirmación del guardado."
+                            purchase.isSuccess -> "Tu suscripción de demostración se actualizó correctamente."
+                            else -> purchase.errorMessage ?: "Reintenta el guardado para continuar."
+                        },
+                        color = Color(0xFF475569),
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Modo demostración · Sin cobros reales",
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            if (purchase.isSuccess) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkBlue)
+                ) {
+                    Text("Volver a Inicio")
+                }
+            } else if (!purchase.isSaving) {
+                if (purchase.planId != null) {
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkBlue)
+                    ) {
+                        Text("Reintentar guardado")
+                    }
+                }
+                TextButton(onClick = onBackToPlans, modifier = Modifier.fillMaxWidth()) {
+                    Text("Volver a los planes", color = DarkBlue)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun PlanBadge(plan: String, onClick: () -> Unit) {
     val (texto, brush, textColor) = when (plan) {
         "PRO" -> Triple(
@@ -249,7 +390,7 @@ private fun PlanBadge(plan: String, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .background(brush)
-            .clickable(enabled = plan == "FREE" || plan == "PLUS", onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {

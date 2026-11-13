@@ -10,29 +10,72 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class AccountViewModel(private val authRepository: AuthRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(AccountUiState(authRepository.currentUser.value))
+class AccountViewModel(
+    private val authRepository: AuthRepository
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(
+        AccountUiState(currentUser = authRepository.currentUser.value)
+    )
     val uiState = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
             authRepository.currentUser.collectLatest { user ->
-                _uiState.update { it.copy(currentUser = user) }
+                _uiState.update { state ->
+                    if (state.currentUser?.uid == user?.uid) {
+                        state.copy(currentUser = user)
+                    } else {
+                        AccountUiState(currentUser = user)
+                    }
+                }
             }
         }
     }
 
     fun sendPasswordReset() {
-        val email = _uiState.value.currentUser?.email?.takeIf(String::isNotBlank) ?: return
+        if (_uiState.value.isLoading) return
+
+        val user = authRepository.currentUser.value
+        val email = user?.email?.trim().orEmpty()
+
+        if (user == null || email.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    successMessage = null,
+                    errorMessage = "Tu cuenta no tiene un correo asociado."
+                )
+            }
+            return
+        }
+
+        if (_uiState.value.currentUser?.uid != user.uid) return
+
+        setLoading()
+
         viewModelScope.launch {
-            setLoading()
-            authRepository.sendPasswordReset(email)
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(isLoading = false, successMessage = "Revisa tu correo para cambiar tu contraseña.")
+            val result = authRepository.sendPasswordReset(email)
+
+            if (authRepository.currentUser.value?.uid != user.uid) {
+                return@launch
+            }
+
+            _uiState.update { state ->
+                result.fold(
+                    onSuccess = {
+                        state.copy(
+                            isLoading = false,
+                            successMessage = "Te enviamos un enlace. Revisa tu correo y la carpeta de spam."
+                        )
+                    },
+                    onFailure = { error ->
+                        state.copy(
+                            isLoading = false,
+                            errorMessage = error.toAuthUserMessage()
+                        )
                     }
-                }
-                .onFailure(::showError)
+                )
+            }
         }
     }
 
