@@ -22,7 +22,17 @@ class FirebaseBusinessRepository(
 
     override suspend fun saveBusiness(business: Business): Result<Unit> = capture {
         val uid = currentUid()
-        profile(uid).set(business, SetOptions.merge()).await()
+        val businessData = mapOf(
+            "nombreNegocio" to business.nombreNegocio,
+            "rubro" to business.rubro,
+            "region" to business.region,
+            "comuna" to business.comuna,
+            "metaMensual" to business.metaMensual,
+            "tipoActividad" to business.tipoActividad
+        )
+
+        profile(uid).set(businessData, SetOptions.merge()).await()
+
         if (currentUid() != uid) throw BusinessAuthenticationException()
     }
 

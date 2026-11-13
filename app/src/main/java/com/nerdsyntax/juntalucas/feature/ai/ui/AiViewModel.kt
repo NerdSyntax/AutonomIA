@@ -2572,7 +2572,7 @@ class AiViewModel(
         val REGEX_MILLONES = Regex("(\\d+(?:[.,]\\d+)?)\\s*millon")
         val REGEX_MONTO_6_A_8_DIGITOS = Regex("\\b(\\d{6,8})\\b")
         val REGEX_ENCABEZADO_MD = Regex("(?m)^\\s*#{1,6}\\s*")
-        val REGEX_LINK_MD = Regex("\\[([^\\u005D]+)]\\(https?://[^)]*\\)")
+            val REGEX_LINK_MD = Regex("\\[([^\\u005D]+)]\\(https?://[^)]*\\)")
         val REGEX_VINETA_MD = Regex("(?m)^\\s*[*]\\s+")
         val REGEX_SALTOS_MULTIPLES = Regex("\\n{3,}")
 
