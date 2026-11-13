@@ -1,6 +1,7 @@
 package com.nerdsyntax.juntalucas.feature.auth.ui.welcome
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -18,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +28,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nerdsyntax.juntalucas.R
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val BrandPurple = Color(0xFF7C3AED)
@@ -34,9 +37,6 @@ private val BorderLight = Color(0xFFE2E8F0)
 
 private val PrimaryGradient = Brush.horizontalGradient(
     colors = listOf(Color(0xFF6366F1), Color(0xFF9333EA))
-)
-private val ChartBarGradient = Brush.verticalGradient(
-    colors = listOf(Color(0xFF9333EA), Color(0xFF6366F1).copy(alpha = 0.6f))
 )
 
 @Composable
@@ -56,6 +56,14 @@ fun WelcomeScreen(
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Spacer(modifier = Modifier.height(24.dp))
+
+                Image(
+                    painter = painterResource(id = R.drawable.logo_autonomia),
+                    contentDescription = "Logo de AutonomIA",
+                    modifier = Modifier
+                        .size(72.dp)
+                        .padding(bottom = 12.dp)
+                )
 
                 Text(
                     text = buildAnnotatedString {
@@ -78,42 +86,45 @@ fun WelcomeScreen(
 
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White.copy(alpha = 0.06f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    color = Color.White.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
+                        .wrapContentHeight()
                 ) {
-                    Box(
-                        modifier = Modifier.padding(18.dp),
-                        contentAlignment = Alignment.BottomCenter
+                    Row(
+                        modifier = Modifier.padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Proyección de ingresos",
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.align(Alignment.TopCenter)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(85.dp)
-                                .padding(horizontal = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
+                        Surface(
+                            shape = CircleShape,
+                            color = BrandPurple.copy(alpha = 0.2f),
+                            modifier = Modifier.size(48.dp)
                         ) {
-                            val heights = listOf(0.35f, 0.45f, 0.65f, 0.55f, 0.85f, 1f)
-                            heights.forEachIndexed { index, fraction ->
-                                Box(
-                                    modifier = Modifier
-                                        .width(26.dp)
-                                        .fillMaxHeight(fraction)
-                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                        .background(ChartBarGradient)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "IA Local",
+                                tint = Color(0xFFC084FC),
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column {
+                            Text(
+                                text = "Copiloto inteligente",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Tu información procesada de forma local y segura para optimizar tu negocio.",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            )
                         }
                     }
                 }
