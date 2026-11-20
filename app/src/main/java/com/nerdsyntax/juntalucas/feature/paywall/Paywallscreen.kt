@@ -76,7 +76,6 @@ fun PaywallScreen(
     var creatingCheckout by remember { mutableStateOf(false) }
 
     BackHandler(enabled = isOnboarding && isContinuing) {
-        // Espera a que termine el guardado del registro.
     }
 
     LaunchedEffect(isOnboarding, onboardingError) {
@@ -146,10 +145,13 @@ fun PaywallScreen(
 
     Scaffold(
         containerColor = LightBg,
+        contentWindowInsets = WindowInsets(0.dp),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = padding.calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
