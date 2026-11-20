@@ -28,7 +28,10 @@ class FirebaseBusinessRepository(
             "region" to business.region,
             "comuna" to business.comuna,
             "metaMensual" to business.metaMensual,
-            "tipoActividad" to business.tipoActividad
+            "tipoActividad" to business.tipoActividad,
+            "puntoPartida" to business.puntoPartida,
+            "onboardingCompleted" to business.onboardingCompleted,
+            "suscripcion" to business.suscripcion
         )
 
         profile(uid).set(businessData, SetOptions.merge()).await()

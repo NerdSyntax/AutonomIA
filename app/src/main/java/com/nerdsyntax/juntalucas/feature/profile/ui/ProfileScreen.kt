@@ -69,7 +69,8 @@ private val ProfilePurpleGradient = Brush.horizontalGradient(
 fun ProfileScreen(
     state: ProfileUiState,
     vm: ProfileViewModel,
-    onNavigateToAccount: (() -> Unit)? = null
+    onNavigateToAccount: (() -> Unit)? = null,
+    onNavigateToEditBusiness: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val plan = rememberProfilePlan()
@@ -481,7 +482,7 @@ fun ProfileScreen(
             icon = Icons.Outlined.Edit,
             iconTint = BrandPurple,
             title = "Editar negocio",
-            onClick = vm::abrirEditarNegocio
+            onClick = { onNavigateToEditBusiness?.invoke() ?: vm.abrirEditarNegocio() }
         )
 
         SectionHeader("SUSCRIPCIONES")
@@ -490,7 +491,13 @@ fun ProfileScreen(
             iconTint = BrandPurple,
             title = "Mi suscripción",
             value = plan.label,
-            onClick = { dialog = ProfileDialog.SUBSCRIPTION }
+            onClick = {
+                if (canManagePlan) {
+                    dialog = ProfileDialog.SUBSCRIPTION
+                } else {
+                    showPlans = true
+                }
+            }
         )
 
         SectionHeader("CONFIGURACIÓN")
@@ -886,9 +893,7 @@ private fun Context.openProfileIntent(intent: Intent, showFailure: Boolean = tru
         startActivity(intent)
         return true
     } catch (_: ActivityNotFoundException) {
-        // El dispositivo no tiene una app que maneje la acción.
     } catch (_: SecurityException) {
-        // El dispositivo no permite abrir esta pantalla.
     }
 
     if (showFailure) {

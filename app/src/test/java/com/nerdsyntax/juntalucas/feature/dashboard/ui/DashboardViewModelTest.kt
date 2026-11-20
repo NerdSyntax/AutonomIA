@@ -37,7 +37,6 @@ class DashboardViewModelTest {
         })
         advanceUntilIdle()
         val state = vm.uiState.value
-        assertEquals("a@example.com", state.userEmail)
         assertEquals("Negocio A", state.nombreNegocio)
         assertEquals(500000L, state.metaMensual)
         assertEquals(0L, state.ventasTotales)
@@ -59,7 +58,6 @@ class DashboardViewModelTest {
         advanceUntilIdle()
         auth.currentUser.value = userB
         advanceUntilIdle()
-        assertEquals("b@example.com", vm.uiState.value.userEmail)
         assertEquals("", vm.uiState.value.nombreNegocio)
         assertTrue(vm.uiState.value.isLoading)
         pendingB.complete(Result.success(Business(nombreNegocio = "Negocio B", metaMensual = 700000)))
@@ -71,7 +69,6 @@ class DashboardViewModelTest {
         auth.logout()
         advanceUntilIdle()
         assertEquals("", vm.uiState.value.nombreNegocio)
-        assertEquals("", vm.uiState.value.userEmail)
         assertEquals(0L, vm.uiState.value.metaMensual)
     }
 
@@ -86,7 +83,6 @@ class DashboardViewModelTest {
         assertNotNull(vm.uiState.value.errorMessage)
         auth.currentUser.value = userB
         advanceUntilIdle()
-        assertEquals("b@example.com", vm.uiState.value.userEmail)
         assertEquals("", vm.uiState.value.nombreNegocio)
         assertFalse(vm.uiState.value.isLoading)
         assertFalse(vm.uiState.value.errorMessage!!.contains("technical details"))

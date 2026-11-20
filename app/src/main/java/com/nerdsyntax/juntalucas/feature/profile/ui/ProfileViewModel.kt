@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.firestore.FirebaseFirestore
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.business.domain.Business
 import com.nerdsyntax.juntalucas.feature.business.domain.BusinessRepository
@@ -20,7 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
-import com.google.firebase.firestore.FirebaseFirestore
 
 class ProfileViewModel(
     private val authRepository: AuthRepository,
@@ -44,9 +44,22 @@ class ProfileViewModel(
             authRepository.currentUser.collectLatest { user ->
                 if (user != null) {
                     val firebaseUser = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
-                    nombreAuth = firebaseUser?.displayName?.takeIf { it.isNotBlank() }
+                    var nombre = firebaseUser?.displayName?.takeIf { it.isNotBlank() }
                         ?: user.displayName?.takeIf { it.isNotBlank() }
-                                ?: ""
+                        ?: ""
+
+                    if (nombre.isBlank()) {
+                        nombre = runCatching {
+                            FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(user.uid)
+                                .get()
+                                .await()
+                                .getString("name")
+                        }.getOrNull()?.takeIf { it.isNotBlank() } ?: ""
+                    }
+
+                    nombreAuth = nombre
                     _uiState.update {
                         it.copy(
                             name = nombreVisible(),
@@ -383,6 +396,7 @@ class ProfileViewModel(
             }
         }
     }
+
     private companion object {
         const val TAG = "ProfileVM"
         const val MONEDA = "Peso chileno (CLP)"

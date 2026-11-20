@@ -2,6 +2,8 @@ package com.nerdsyntax.juntalucas.feature.auth.ui.register
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.nerdsyntax.juntalucas.feature.auth.domain.repository.AuthRepository
 import com.nerdsyntax.juntalucas.feature.auth.ui.common.isValidEmail
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class RegisterViewModel(private val authRepository: AuthRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(RegisterUiState())
@@ -43,12 +46,25 @@ class RegisterViewModel(private val authRepository: AuthRepository) : ViewModel(
 
             authRepository.register(email, state.password)
                 .onSuccess {
-                    val uid = authRepository.currentUser.value?.uid
+                    val firebaseUser = FirebaseAuth.getInstance().currentUser
+                    val uid = authRepository.currentUser.value?.uid ?: firebaseUser?.uid
+
+                    runCatching {
+                        firebaseUser?.updateProfile(
+                            UserProfileChangeRequest.Builder()
+                                .setDisplayName(nombre)
+                                .build()
+                        )?.await()
+                    }
+
                     if (uid != null) {
-                        FirebaseFirestore.getInstance()
-                            .collection("users")
-                            .document(uid)
-                            .set(mapOf("name" to nombre))
+                        runCatching {
+                            FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(uid)
+                                .set(mapOf("name" to nombre))
+                                .await()
+                        }
                     }
 
                     _uiState.update { it.copy(isLoading = false) }

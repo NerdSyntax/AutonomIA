@@ -259,7 +259,6 @@ fun AppNavigation() {
 
                 LaunchedEffect(state.isSuccess) {
                     if (state.isSuccess) {
-                        navController.navigateAndClear(Routes.SESSION_CHECK)
                         sessionViewModel.refreshBusiness()
                     }
                 }
@@ -576,15 +575,27 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Routes.PROFILE) {
+            composable(Routes.PROFILE) { entry ->
                 if (!session.canAccessDashboard) return@composable
                 val vm: ProfileViewModel = viewModel(factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+                val sharedEntry = remember(entry) {
+                    navController.getBackStackEntry(navController.graph.id)
+                }
+                val businessVm: BusinessViewModel = viewModel(
+                    viewModelStoreOwner = sharedEntry,
+                    factory = factory
+                )
 
                 ProfileScreen(
                     state = state,
                     vm = vm,
-                    onNavigateToAccount = { navController.navigate(Routes.ACCOUNT) }
+                    onNavigateToAccount = { navController.navigate(Routes.ACCOUNT) },
+                    onNavigateToEditBusiness = {
+                        businessVm.onTabSelected(BusinessTab.INFORMACION)
+                        businessVm.startEditingBusiness()
+                        navController.navigateToBottomRoute(Routes.BUSINESS)
+                    }
                 )
             }
 

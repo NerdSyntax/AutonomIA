@@ -93,6 +93,7 @@ dependencies {
 
     //api ia
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    androidTestImplementation(platform(libs.androidx.compose.bom))
 
     // Tests
     testImplementation(libs.junit)
