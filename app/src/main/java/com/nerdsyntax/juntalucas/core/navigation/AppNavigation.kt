@@ -223,9 +223,18 @@ fun AppNavigation() {
 
             composable(Routes.ACTIVITY_SELECTION) { navBackStackEntry ->
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
-                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.BUSINESS_INFO) }
+
+                val parentEntry = remember(navBackStackEntry) {
+                    try {
+                        navController.getBackStackEntry(Routes.BUSINESS_INFO)
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    }
+                } ?: return@composable
+
                 val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+
                 ActivitySelectionScreen(
                     state = state,
                     onTipoActividadChange = vm::onTipoActividadChange,
@@ -236,9 +245,18 @@ fun AppNavigation() {
 
             composable("plan_selection") { navBackStackEntry ->
                 if (!session.isEmailVerified || session.businessSetupStatus != BusinessSetupStatus.REQUIRED) return@composable
-                val parentEntry = remember(navBackStackEntry) { navController.getBackStackEntry(Routes.BUSINESS_INFO) }
+
+                val parentEntry = remember(navBackStackEntry) {
+                    try {
+                        navController.getBackStackEntry(Routes.BUSINESS_INFO)
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    }
+                } ?: return@composable
+
                 val vm: OnboardingViewModel = viewModel(parentEntry, factory = factory)
                 val state by vm.uiState.collectAsStateWithLifecycle()
+
                 LaunchedEffect(state.isSuccess) {
                     if (state.isSuccess) {
                         navController.navigateAndClear(Routes.SESSION_CHECK)
@@ -266,6 +284,7 @@ fun AppNavigation() {
                     }
                 }
             }
+
             composable(Routes.DASHBOARD) { entry ->
                 if (!session.canAccessDashboard) return@composable
                 val vm: DashboardViewModel = viewModel(factory = factory)
