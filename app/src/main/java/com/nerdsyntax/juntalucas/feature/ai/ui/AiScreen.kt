@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.nerdsyntax.juntalucas.feature.paywall.ui.LimitReachedDialog
 import com.nerdsyntax.juntalucas.feature.paywall.ui.PaywallScreen
+import java.util.Calendar
 
 private val DarkBlue = Color(0xFF0F2A4A)
 private val HeaderGradientEnd = Color(0xFF1E3A5F)
@@ -279,41 +280,37 @@ private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
                 color = DarkBlue
             )
             Spacer(modifier = Modifier.height(10.dp))
-            if (state.periodos.isEmpty()) {
-                Text(
-                    text = "Cargando periodos...",
-                    color = TextGray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            } else {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+            PeriodoSelectorDropdown(
+                periodoSeleccionado = state.periodoSeleccionado,
+                onPeriodoSelected = { vm.onPeriodoSelected(it) }
+            )
+
+            val sinDatosPeriodo = !state.isLoadingData &&
+                    state.ventasRegistradas == 0 &&
+                    state.gastosRegistrados == 0
+
+            if (sinDatosPeriodo && state.periodoSeleccionado.isNotBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = AmberSoftBg,
+                    border = BorderStroke(1.dp, AmberWarn.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(state.periodos) { periodo ->
-                        val isSelected = periodo == state.periodoSeleccionado
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) LightPurple else Color.White,
-                            border = BorderStroke(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) BrandPurple else BorderLight
-                            ),
-                            shadowElevation = if (isSelected) 0.dp else 1.dp,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable { vm.onPeriodoSelected(periodo) }
-                        ) {
-                            Text(
-                                text = periodo,
-                                color = if (isSelected) BrandPurple else TextGray,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⚠️", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "No tienes ventas ni gastos registrados en ${state.periodoSeleccionado}. Selecciona otro mes con movimientos para generar un diagnóstico.",
+                            color = AmberText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 17.sp
+                        )
                     }
                 }
             }
@@ -326,14 +323,24 @@ private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = "Métricas disponibles para el análisis",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = DarkBlue
                         )
+                        if (state.isLoadingData) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = BrandPurple
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -344,14 +351,14 @@ private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
                         KpiStatPill(
                             modifier = Modifier.weight(1f),
                             label = "Ventas registradas",
-                            value = state.ventasRegistradas.toString(),
+                            value = if (state.isLoadingData) "..." else state.ventasRegistradas.toString(),
                             valueColor = GreenSuccess,
                             bgColor = GreenSoftBg
                         )
                         KpiStatPill(
                             modifier = Modifier.weight(1f),
                             label = "Gastos registrados",
-                            value = state.gastosRegistrados.toString(),
+                            value = if (state.isLoadingData) "..." else state.gastosRegistrados.toString(),
                             valueColor = RedDanger,
                             bgColor = RedSoftBg
                         )
@@ -390,22 +397,11 @@ private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Base comparativa", color = TextGray, fontSize = 13.sp)
-                        if (state.periodoComparacion.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = SoftIndigoBg
-                            ) {
-                                Text(
-                                    text = state.periodoComparacion,
-                                    color = BlueBadge,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                )
-                            }
-                        } else {
-                            Text("Sin periodo previo", color = TextGray, fontSize = 13.sp)
-                        }
+                        PeriodoComparacionDropdown(
+                            periodoComparacion = state.periodoComparacion,
+                            periodoExcluido = state.periodoSeleccionado,
+                            onComparacionSelected = { vm.onPeriodoComparacionSelected(it) }
+                        )
                     }
                 }
             }
@@ -446,29 +442,46 @@ private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+            val botonDeshabilitado = state.isLoadingData || sinDatosPeriodo
             Surface(
-                onClick = { vm.onGenerarAnalisisEstructuradoClick() },
+                onClick = { if (!botonDeshabilitado) vm.onGenerarAnalisisEstructuradoClick() },
+                enabled = !botonDeshabilitado,
                 shape = RoundedCornerShape(20.dp),
                 color = Color.Transparent,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
-                        .background(AiPurpleGradient)
+                        .background(
+                            if (botonDeshabilitado) Brush.horizontalGradient(listOf(BorderLight, BorderLight))
+                            else AiPurpleGradient
+                        )
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    if (state.isLoadingData) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = TextGray
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = if (sinDatosPeriodo) TextGray else Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Generar Diagnóstico Ejecutivo (3 claves)",
-                        color = Color.White,
+                        text = when {
+                            state.isLoadingData -> "Actualizando métricas..."
+                            sinDatosPeriodo -> "Sin datos en este periodo"
+                            else -> "Generar Diagnóstico Ejecutivo (3 claves)"
+                        },
+                        color = if (botonDeshabilitado) TextGray else Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -567,6 +580,275 @@ private fun AiHomeContent(state: AiUiState, vm: AiViewModel) {
                 }
             }
             Spacer(modifier = Modifier.height(90.dp))
+        }
+    }
+}
+
+@Composable
+private fun PeriodoSelectorDropdown(
+    periodoSeleccionado: String,
+    onPeriodoSelected: (String) -> Unit
+) {
+    val meses = remember {
+        listOf(
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        )
+    }
+
+    val calendar = remember { Calendar.getInstance() }
+    val currentYear = calendar.get(Calendar.YEAR)
+    val currentMonthIndex = calendar.get(Calendar.MONTH)
+
+    val initialYear = periodoSeleccionado.substringAfterLast(" ").toIntOrNull() ?: currentYear
+    var expanded by remember { mutableStateOf(false) }
+    var displayedYear by remember(periodoSeleccionado) { mutableIntStateOf(initialYear) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(14.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, BorderLight),
+            shadowElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.CalendarToday,
+                        contentDescription = null,
+                        tint = BrandPurple,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = periodoSeleccionado.ifBlank { "Seleccionar mes" },
+                        color = DarkBlue,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Elegir periodo",
+                    tint = TextGray,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .width(260.dp)
+                .heightIn(max = 360.dp)
+                .background(Color.White)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { displayedYear -= 1 },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "Año anterior",
+                        tint = DarkBlue
+                    )
+                }
+
+                Text(
+                    text = displayedYear.toString(),
+                    color = DarkBlue,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                IconButton(
+                    onClick = { if (displayedYear < currentYear) displayedYear += 1 },
+                    enabled = displayedYear < currentYear,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Año siguiente",
+                        tint = if (displayedYear < currentYear) DarkBlue else BorderLight
+                    )
+                }
+            }
+
+            HorizontalDivider(color = BorderLight)
+
+            meses.forEachIndexed { index, mes ->
+                val isFuture = displayedYear == currentYear && index > currentMonthIndex
+                val label = "$mes $displayedYear"
+                val isSelected = label.equals(periodoSeleccionado, ignoreCase = true)
+
+                DropdownMenuItem(
+                    enabled = !isFuture,
+                    text = {
+                        Text(
+                            text = mes,
+                            color = when {
+                                isFuture -> TextGray.copy(alpha = 0.35f)
+                                isSelected -> BrandPurple
+                                else -> DarkBlue
+                            },
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 14.sp
+                        )
+                    },
+                    modifier = Modifier.background(
+                        if (isSelected) LightPurple.copy(alpha = 0.5f) else Color.Transparent
+                    ),
+                    onClick = {
+                        expanded = false
+                        onPeriodoSelected(label)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeriodoComparacionDropdown(
+    periodoComparacion: String,
+    periodoExcluido: String,
+    onComparacionSelected: (String) -> Unit
+) {
+    val meses = remember {
+        listOf(
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        )
+    }
+
+    val calendar = remember { Calendar.getInstance() }
+    val currentYear = calendar.get(Calendar.YEAR)
+    val currentMonthIndex = calendar.get(Calendar.MONTH)
+
+    val initialYear = periodoComparacion.substringAfterLast(" ").toIntOrNull() ?: currentYear
+    var expanded by remember { mutableStateOf(false) }
+    var displayedYear by remember(periodoComparacion) { mutableIntStateOf(initialYear) }
+
+    Box {
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(8.dp),
+            color = SoftIndigoBg
+        ) {
+            Row(
+                modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = periodoComparacion.ifBlank { "Elegir mes" },
+                    color = BlueBadge,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Cambiar base comparativa",
+                    tint = BlueBadge,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .width(240.dp)
+                .heightIn(max = 340.dp)
+                .background(Color.White)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { displayedYear -= 1 },
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "Año anterior",
+                        tint = DarkBlue
+                    )
+                }
+
+                Text(
+                    text = displayedYear.toString(),
+                    color = DarkBlue,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                IconButton(
+                    onClick = { if (displayedYear < currentYear) displayedYear += 1 },
+                    enabled = displayedYear < currentYear,
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Año siguiente",
+                        tint = if (displayedYear < currentYear) DarkBlue else BorderLight
+                    )
+                }
+            }
+
+            HorizontalDivider(color = BorderLight)
+
+            meses.forEachIndexed { index, mes ->
+                val isFuture = displayedYear == currentYear && index > currentMonthIndex
+                val label = "$mes $displayedYear"
+                val isSameAsEvaluated = label.equals(periodoExcluido, ignoreCase = true)
+                val isSelected = label.equals(periodoComparacion, ignoreCase = true)
+                val isDisabled = isFuture || isSameAsEvaluated
+
+                DropdownMenuItem(
+                    enabled = !isDisabled,
+                    text = {
+                        Text(
+                            text = if (isSameAsEvaluated) "$mes (en evaluación)" else mes,
+                            color = when {
+                                isDisabled -> TextGray.copy(alpha = 0.35f)
+                                isSelected -> BlueBadge
+                                else -> DarkBlue
+                            },
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
+                    },
+                    modifier = Modifier.background(
+                        if (isSelected) SoftIndigoBg else Color.Transparent
+                    ),
+                    onClick = {
+                        expanded = false
+                        onComparacionSelected(label)
+                    }
+                )
+            }
         }
     }
 }
